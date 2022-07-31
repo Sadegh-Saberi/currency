@@ -1,11 +1,29 @@
+from threading import Thread
 import requests
 import pyodbc
 from utils import percatge_difference, number_rounder
 from time import sleep
+from selenium.webdriver import Chrome, ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver import ChromeOptions
+import time
+
 import os
 
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file,access_file):
+        self.data = {
+            "MEXC":{},
+            "HOTBIT":{},
+            "BITURE":{},
+            "XT":{},
+            "GATE":{},
+            "LBANK":{},
+            "PHEMEX":{},
+        }            
+        self.sleep_time = 0
         # database file absolute path
         file_path = os.path.abspath(access_file)
         # the string connection for connection to access database
@@ -58,185 +76,211 @@ class CurrencyRequest:
                         cursor.execute(query)
                         connection.commit()
 
-    def update_access(self, data: dict = None):
+    def update_access(self):
         with pyodbc.connect(self.connection_string) as connection:
             with connection.cursor() as cursor:
-                for exchange, value in data.items():
-                    for currency_name, price in value.items():
-                        query = f"""UPDATE currencies
-                                SET {exchange.lower()} = '{price}'
-                                WHERE [currency name] = '{currency_name}';"""
-                        cursor.execute(query)
-                        connection.commit()
+                while True:
+                    for exchange, value in self.data.items():
+                        for currency_name, price in value.items():
+                            query = f"""UPDATE currencies
+                                    SET {exchange.lower()} = '{price}'
+                                    WHERE [currency name] = '{currency_name}';"""
+                            cursor.execute(query)
+                            connection.commit()
 
-                query = "SELECT * FROM currencies"
-                rows = cursor.execute(query).fetchall()
-                expected_rows_values = [
-                    [float(price) for price in row[1:-1] if price != None] for row in rows
-                ]
+                    query = "SELECT * FROM currencies"
+                    rows = cursor.execute(query).fetchall()
+                    expected_rows_values = [
+                        [float(price) for price in row[1:-1] if price != None] for row in rows
+                    ]
 
-                for row in expected_rows_values:
-                    # get the row index in 'expected_rows_values' list
-                    row_index = expected_rows_values.index(row)
-                    # get the row currency name for adding the percentage difference data
-                    currency_name = rows[row_index][0]
-                    # if more that one price is in the row ...
-                    if len(row) > 1:
-                        result = percatge_difference(row)
-                        query = f"""
-                                    UPDATE currencies
-                                    SET [percentage difference] = '{result}'
-                                    WHERE [currency name] = '{currency_name}';
-                                    """
-                        cursor.execute(query)
-                        connection.commit()
+                    for row in expected_rows_values:
+                        # get the row index in 'expected_rows_values' list
+                        row_index = expected_rows_values.index(row)
+                        # get the row currency name for adding the percentage difference data
+                        currency_name = rows[row_index][0]
+                        # if more that one price is in the row ...
+                        if len(row) > 1:
+                            result = percatge_difference(row)
+                            query = f"""
+                                        UPDATE currencies
+                                        SET [percentage difference] = '{result}'
+                                        WHERE [currency name] = '{currency_name}';
+                                        """
+                            cursor.execute(query)
+                            connection.commit()
+                    time.sleep(5)
 
-    def mexc(self):
+    def options(self, hidden: bool = True):
+
+        prefs = {'profile.default_content_setting_values': {'images': 2,
+                                                            'plugins': 2, 'popups': 2, 'geolocation': 2,
+                                                            'notifications': 2, 'auto_select_certificate': 2, 'fullscreen': 2,
+                                                            'mouselock': 2, 'mixed_script': 2, 'media_stream': 2,
+                                                            'media_stream_mic': 2, 'media_stream_camera': 2, 'protocol_handlers': 2,
+                                                            'ppapi_broker': 2, 'automatic_downloads': 2, 'midi_sysex': 2,
+                                                            'push_messaging': 2, 'ssl_cert_decisions': 2, 'metro_switch_to_desktop': 2,
+                                                            'protected_media_identifier': 2, 'app_banner': 2, 'site_engagement': 2,
+                                                            'durable_storage': 2}}
+
+        options = ChromeOptions()
+        options.add_experimental_option('prefs', prefs)
+        options.add_argument("disable-infobars")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-software-rasterizer")
+        if hidden == True:
+            options.add_argument("--headless")
+            options.add_argument("--disable-gpu")
+        else:
+            options.add_argument("--start-maximized")
+        return options
+
+    def mexc(self):        
         "document: https://mxcdevelop.github.io/APIDoc/open.api.v2.en.html#ticker-information"
         base_url = 'https://www.mexc.com/'
         path = '/open/api/v2/market/ticker'
-        request = requests.get(base_url+path)
-        currencies = request.json()['data']
-        result = {}
-        for currency in currencies:
-            symbol = currency['symbol']
-            if symbol in self.allowed_currencies:
-                price = number_rounder(float(currency['last']))
-                result.update({symbol:price})
-        return {"MEXC":result}
+        while True:
+            request = requests.get(base_url+path)
+            currencies = request.json()['data']
+            for currency in currencies:
+                symbol = currency['symbol']
+                if symbol in self.allowed_currencies:
+                    price = number_rounder(float(currency['last']))
+                    self.data.get("MEXC").update({symbol:price})
+                
+            time.sleep(self.sleep_time)
 
-
-    # def mexc_status(self):
-    #     base_url = "https://www.mexc.com"
-    #     path = "/open/api/v2/market/coin/list"
-    #     request = requests.get(base_url+path)
-    #     print(request.url)
-        
-        
 
     def hotbit(self):
         "document: https://github.com/hotbitex/hotbit.io-api-docs/blob/master/rest_api_en.md"
         path = 'https://api.hotbit.io/api/v1/allticker'
-        request = requests.get(path)
-        currencies = request.json()['ticker']
-        expected_currencies = {}
-        for currency in currencies:
-            symbol = currency['symbol']
-            if symbol in self.allowed_currencies:
-                price = number_rounder(float(currency['last']))
-                expected_currencies.update({symbol:price})
-        return {"HOTBIT":expected_currencies}
+        while True:
+            request = requests.get(path)
+            currencies = request.json()['ticker']
+
+            for currency in currencies:
+                symbol = currency['symbol']
+                if symbol in self.allowed_currencies:
+                    price = number_rounder(float(currency['last']))
+                    self.data.get("HOTBIT").update({symbol:price})
+            time.sleep(self.sleep_time)
+
 
     def lbank(self):
         "document: https://github.com/LBank-exchange/lbank-official-api-docs"
         base_url = 'https://api.lbkex.com/'
         path = 'v1/ticker.do'
         params = {'symbol':'all'}
-        request = requests.get(base_url+path,params=params)
-        print(request.url)
-        currencies = request.json()
-        expected_currencies = {}
-        for currency in currencies:
-            symbol = currency['symbol'].upper() 
-            if symbol in self.allowed_currencies:
-                currency_index = self.allowed_currencies.index(symbol)
-                price = number_rounder(currency.get('ticker').get('latest'))
-                expected_currencies.update({self.allowed_currencies[currency_index]:price})
-        return {"LBANK":expected_currencies}
+        driver = Chrome(options=self.options())
+        action = ActionChains(driver)
+        driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
+        search_box = WebDriverWait(driver,1).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
+
+        while True:
+            request = requests.get(base_url+path,params=params)
+            allowed_currencies = self.allowed_currencies.copy()
+            currencies = request.json()
+            for currency in currencies:
+                symbol = currency['symbol'].upper() 
+                if symbol in allowed_currencies:
+                    currency_index = self.allowed_currencies.index(symbol)
+                    price = number_rounder(currency['ticker']['latest'])
+                    self.data.get("LBANK").update({self.allowed_currencies[currency_index]:price})
+                    allowed_currencies.remove(symbol)
+                    
+
+            for currency in allowed_currencies:
+                search_box.clear()
+                search_box.send_keys(currency.replace('_','/'))                
+                try:
+                    first_search_result = WebDriverWait(driver,2).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    action.click(first_search_result).perform()
+                    price = WebDriverWait(driver,3).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
+                    self.data.get("LBANK").update({currency:price})
+                except :
+                    pass
+
     
     def biture(self):
         base_url = 'https://openapi.bitrue.com/'
         path = '/api/v1/exchangeInfo'
-        request = requests.get(base_url+path)
-        currencies = request.json().get('symbols')
-        expected_currencies = {}
-        for currency in currencies:
-            symbol = currency.get("symbol")
-            expected_allowed_currencies = [currency.replace("_",'') for currency in self.allowed_currencies]
-            if symbol.upper() in expected_allowed_currencies:
-                currency_index = expected_allowed_currencies.index(symbol.upper())
-                float_price = float(currency.get('filters')[0].get('maxPrice'))*(1/10)
-                price = number_rounder(float_price)
-                expected_currencies.update({self.allowed_currencies[currency_index]:price})
-        return {"BITURE":expected_currencies}
+        while True:
+            request = requests.get(base_url+path)
+            currencies = request.json().get('symbols')
+            for currency in currencies:
+                symbol = currency.get("symbol")
+                expected_allowed_currencies = [currency.replace("_",'') for currency in self.allowed_currencies]
+                if symbol.upper() in expected_allowed_currencies:
+                    currency_index = expected_allowed_currencies.index(symbol.upper())
+                    float_price = float(currency.get('filters')[0].get('maxPrice'))*(1/10)
+                    price = number_rounder(float_price)
+                    self.data.get("BITURE").update({self.allowed_currencies[currency_index]:price})
+                    # expected_currencies.update({self.allowed_currencies[currency_index]:price})
+
+            time.sleep(self.sleep_time)
+
 
     def gate(self):
         "document: https://www.gate.io/docs/apiv4/en/#get-details-of-a-specifc-order"
         host = "https://api.gateio.ws"
         perfix = "/api/v4"
         url = '/spot/tickers'
-        request = requests.get(host+perfix+url)
-        currencies = request.json()
-        expected_currencies = {}
-        for currency in currencies:
-            symbol = currency.get("currency_pair")
-            if symbol in self.allowed_currencies:
-                price = number_rounder(float(currency.get("last")))
-                expected_currencies.update({symbol:price})
-        return {"GATE":expected_currencies}
-
-    def gate_status(self):
-        host = "https://api.gateio.ws"
-        prefix = "/api/v4"
-        url = '/spot/currencies'
-        request = requests.get(host + prefix + url)
-        currencies = request.json()
-        expected_data = {}
-        for currency in currencies:
-            try:
-                symbol = currency.get('currency')+"_"+currency.get("chain")
-                status = ''
+        while True:
+            request = requests.get(host+perfix+url)
+            currencies = request.json()
+            for currency in currencies:
+                symbol = currency.get("currency_pair")
                 if symbol in self.allowed_currencies:
-                    print(currency.get("withdraw_disabled"))
-                    if currency.get("withdraw_disabled") == False:
-                        status += 'w'
-                    if currency.get("deposit_disabled") == False:
-                        status += ' / d'
-                    expected_data.update({symbol:status})
-            except: pass
-        return {"GATE_STATUS":expected_data}
+                    price = number_rounder(float(currency.get("last")))
+                    self.data.get("GATE").update({symbol:price})
 
-
+            time.sleep(self.sleep_time)
 
     def xt(self):
         "document: https://github.com/xtpub/api-doc/blob/master/rest-api-v1-en.md"
         host = "https://api.xt.pub"
         perfix = "/data/api/v1"
         url = "/getTickers"
-        request = requests.get(host+perfix+url)
-        currencies = request.json()
-        expected_currencies = {}
-        for symbol, value in currencies.items():
-            if symbol.upper() in self.allowed_currencies:
-                price = number_rounder(value.get("price"))
-
-                expected_currencies.update({symbol:price})
-        return {"XT":expected_currencies} 
+        while True:
+            request = requests.get(host+perfix+url)
+            currencies = request.json()
+            for symbol, value in currencies.items():
+                if symbol.upper() in self.allowed_currencies:
+                    price = number_rounder(value.get("price"))
+                    self.data.get("XT").update({symbol:price})
+            time.sleep(self.sleep_time)
+            
     
 
-
+    def phemex(self):
+        driver = Chrome(options=self.options())
+        driver.get("https://phemex.com/markets?tabType=Spot")
+        elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
+        expected_elements = {}
+        for element in elements:
+            currency = element.find_element(
+                By.CSS_SELECTOR, "div:nth-child(2) > div > div > span").text.replace(" ", "").replace("/","_")
+            if currency in self.allowed_currencies:
+                price_element = element.find_element(
+                    By.CSS_SELECTOR, "div:nth-child(3)")
+                expected_elements.update({currency: price_element})
+        while True:
+            for currency, price_element in expected_elements.items():
+                price = price_element.text
+                self.data.get("PHEMEX").update({currency: price})
             
+            time.sleep(self.sleep_time)
 
 currency_request = CurrencyRequest("allowed_currencies.txt","data.accdb")
 
 currency_request.create_database()
 
-while True:
-    try:
-        currency_request.update_access(currency_request.mexc()) 
-    except: print("mexc request failed")
-    try:
-        currency_request.update_access(currency_request.hotbit())
-    except: print("hotbit request failed")
-    try:
-        currency_request.update_access(currency_request.biture())
-    except: print("biture request failed")
-    try:
-        currency_request.update_access(currency_request.gate())
-    except: print("gate request failed")
-    try:
-        currency_request.update_access(currency_request.lbank())
-    except: print("lbank request failed")
-    try:
-        currency_request.update_access(currency_request.xt())
-    except: print("xt request failed")
+Thread(target=currency_request.update_access).start()
+Thread(target=currency_request.mexc).start()
+Thread(target=currency_request.hotbit).start()
+Thread(target=currency_request.gate).start()
+Thread(target=currency_request.xt).start()
+Thread(target=currency_request.biture).start()
+Thread(target=currency_request.lbank).start()
+Thread(target=currency_request.phemex).start()
