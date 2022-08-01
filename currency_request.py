@@ -2,14 +2,15 @@ from threading import Thread
 import requests
 import pyodbc
 from utils import percatge_difference, number_rounder
-from time import sleep
 from selenium.webdriver import Chrome, ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ChromeOptions
+import hashlib
+import hmac
+import json
 import time
-
 import os
 
 class CurrencyRequest:
@@ -25,6 +26,8 @@ class CurrencyRequest:
             "PHEMEX":{},
             "COINEX":{},
             "COINEX_STATUS":{},
+            "BIBOX":{},
+            "BIBOX_STATUS":{},
         }            
         # set time sleep for each currancy request duration
         self.sleep_time = 0
@@ -72,6 +75,8 @@ class CurrencyRequest:
                         phemex VARCHAR,
                         coinex VARCHAR,
                         coinex_status VARCHAR,
+                        bibox VARCHAR,
+                        bibox_status VARCHAR,
                         [percentage difference] NUMBER
                         )"""
                     cursor.execute(query)
@@ -103,9 +108,17 @@ class CurrencyRequest:
 
                     query = "SELECT * FROM currencies"
                     rows = cursor.execute(query).fetchall()
-                    expected_rows_values = [
-                        [float(price) for price in row[1:-1] if price != None and type(price) != str] for row in rows
-                    ]
+                    # expected_rows_values = [
+                    #     [float(price) for price in row[1:-1] if type(price) in [int, float]] for row in rows
+                    # ]
+                    expected_rows_values = []
+                    for row in rows:
+                        temperory_list = []
+                        for price in row[1:-1]:
+                            try:
+                                temperory_list.append(float(price))
+                            except: pass
+                        expected_rows_values.append(temperory_list)
 
                     for row in expected_rows_values:
                         # get the row index in 'expected_rows_values' list
@@ -154,9 +167,6 @@ class CurrencyRequest:
         prices_path = '/open/api/v2/market/ticker'
         withdraw_deposit_path = "/open/api/v2/market/coin/list"
         while True:
-            with requests.get(base_url+withdraw_deposit_path) as first:
-                currencies_status = first.json().get("data")
-
             with requests.get(base_url+prices_path) as request:
                 currencies = request.json()['data']
                 for pair_currency in currencies:
@@ -164,21 +174,31 @@ class CurrencyRequest:
                     if symbol in self.allowed_currencies:
                         price = number_rounder(float(pair_currency['last']))
                         self.data.get("MEXC").update({symbol:price})
-                        # set the currency status -> 'w', 'd','w / d'
-                        for currency in currencies_status:
-                            currency_name = currency.get('currency')
-                            if currency_name == symbol.split("_")[0]:
-                                # get the first coin for testing ...
-                                chain = currency.get('coins')[0]
-                                status  = 'w' if chain.get('is_withdraw_enabled') == True else '' 
-                                status += 'd' if chain.get("is_deposit_enabled") == True else ''
-                                # insert ' / ' into status for separating 'w' and 'd' letters
-                                if len(status) == 2:
-                                    status_list = list(status)
-                                    status_list.insert(1,' / ')
-                                    status = ''.join(status_list)
-                                self.data.get("MEXC_STATUS").update({symbol:status})
             time.sleep(self.sleep_time)
+    
+    def mexc_status(self):
+        base_url = 'https://www.mexc.com/'
+        withdraw_deposit_path = "/open/api/v2/market/coin/list"
+        with requests.get(base_url+withdraw_deposit_path) as first:
+            currencies_status = first.json().get("data")
+
+        for allowed_currency in self.allowed_currencies:
+            expected_currency = allowed_currency.split("_")[0]
+            for currency in currencies_status:
+                currency_name = currency.get('currency')
+                if currency_name == expected_currency:
+                    # get the first coin for testing ...
+                    chain = currency.get('coins')[0]
+                    status  = 'w' if chain.get('is_withdraw_enabled') == True else '' 
+                    status += 'd' if chain.get("is_deposit_enabled") == True else ''
+                    # insert ' / ' into status for separating 'w' and 'd' letters
+                    if len(status) == 2:
+                        status_list = list(status)
+                        status_list.insert(1,' / ')
+                        status = ''.join(status_list)
+                    self.data.get("MEXC_STATUS").update({allowed_currency:status})
+                    break
+
 
 
     def hotbit(self):
@@ -203,7 +223,7 @@ class CurrencyRequest:
         driver = Chrome(options=self.options())
         action = ActionChains(driver)
         driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
-        search_box = WebDriverWait(driver,1).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
+        search_box = WebDriverWait(driver,5).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
 
         while True:
             request = requests.get(base_url+path,params=params)
@@ -308,32 +328,97 @@ class CurrencyRequest:
         path = "/v1/market/ticker/all"
         expected_allowed_currencies = [currency.replace("_","") for currency in self.allowed_currencies]
         while True:
-            with requests.get(base_url+path) as request:
-                currencies = request.json().get("data").get("ticker")
-                for currency, value in currencies.items():
-                    if currency in expected_allowed_currencies:
-                        index = expected_allowed_currencies.index(currency)
-                        price = number_rounder(float(value.get("last")))
-                        self.data.get("COINEX").update({self.allowed_currencies[index]:price})
+            try:
+                with requests.get(base_url+path) as request:
+                    currencies = request.json().get("data").get("ticker")
+                    for currency, value in currencies.items():
+                        if currency in expected_allowed_currencies:
+                            index = expected_allowed_currencies.index(currency)
+                            price = number_rounder(float(value.get("last")))
+                            self.data.get("COINEX").update({self.allowed_currencies[index]:price})
+            except: print("coinex Error! Maybe your vpn is not connected!")
+
     def coinex_status(self):
         "document: https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot001_market010_asset_config"
         base_url = "https://api.coinex.com"
         path = "/v1/common/asset/config"
         # expected_allowed_currencies = [currency.split("_")[0] for currency in self.allowed_currencies]
         # while True:
-        with requests.get(base_url+path) as request:
-            currencies = request.json().get("data")
-            for currency in self.allowed_currencies:
-                expected_currency = currency.split("_")[0]
-                value = currencies.get(expected_currency)
-                if value != None:
-                    status = 'w' if value.get("can_withdraw") == True else ''
-                    status += 'd' if value.get("can_deposit") == True else ''
-                    if len(status) == 2:
-                        status_list = list(status)
-                        status_list.insert(1,' / ')
-                        status = ''.join(status_list)
-                    self.data.get('COINEX_STATUS').update({currency:status})
+        try:
+            with requests.get(base_url+path) as request:
+                currencies = request.json().get("data")
+                for currency in self.allowed_currencies:
+                    expected_currency = currency.split("_")[0]
+                    value = currencies.get(expected_currency)
+                    if value != None:
+                        status = 'w' if value.get("can_withdraw") == True else ''
+                        status += 'd' if value.get("can_deposit") == True else ''
+                        if len(status) == 2:
+                            status_list = list(status)
+                            status_list.insert(1,' / ')
+                            status = ''.join(status_list)
+                        self.data.get('COINEX_STATUS').update({currency:status})
+        except: print("coinex_status Error! Maybe your vpn is not connected!")
+
+
+    def bibiox(self):
+        base_url = "https://api.bibox.com"
+        path = "/v3/mdata/marketAll"
+        while True:
+            with requests.get(base_url+path) as request:
+                currencies = request.json().get("result")
+                for currency in currencies:
+                    symbol = currency.get("coin_symbol")+"_"+currency.get("currency_symbol")
+                    if symbol in self.allowed_currencies:
+                        price = number_rounder(float(currency.get("last")))
+                        self.data.get("BIBOX").update({symbol:price})
+
+
+    def bibox_status(self):
+        "document: https://biboxcom.github.io/v3/spot/en/?python#get-currency-configuration"
+        base_url = "https://api.bibox.com" # 'https://api.bibox.tel' #
+        # path = "/v3.1/transfer/coinConfig"
+        API_KEY = 'fc12d470d95e33187c1846b99894d245d6b9d56c'
+        SECRET_KEY = '20dc6f4afb368158a6a64fd44ab9fe88a67d456d'
+
+        def do_sign(body):
+            timestamp = int(time.time()) * 1000
+            # to_sign = str(timestamp)+json.dumps(body,separators=(',',':'))
+            to_sign = str(timestamp) + json.dumps(body)
+            sign = hmac.new(SECRET_KEY.encode("utf-8"), to_sign.encode("utf-8"), hashlib.md5).hexdigest()
+            headers = {
+                'bibox-api-key': API_KEY,
+                'bibox-api-sign': sign,
+                'bibox-timestamp': str(timestamp)
+            }
+            return headers
+
+
+        def do_request():
+            path = '/v3.1/transfer/coinConfig'
+            body = {
+
+            }
+            headers = do_sign(body)
+            response = requests.post(base_url + path, json=body, headers=headers)
+            currencies = response.json().get("result")
+            for allowed_currency in self.allowed_currencies:
+                expected_allowed_currency = allowed_currency.split("_")[0]
+                for currency in currencies:
+                    if currency.get("coin_symbol") == expected_allowed_currency:
+                        status = 'w' if currency.get("enable_withdraw") == 1 else ''
+                        status += 'd' if currency.get("enable_deposit") == 1 else ''
+                        if len(status) == 2:
+                            list_status = list(status)
+                            list_status.insert(1,' / ')
+                            status = ''.join(list_status)
+                        self.data.get("BIBOX_STATUS").update({allowed_currency:status})
+                        break
+            
+        do_request()
+
+
+
 
 currency_request = CurrencyRequest("allowed_currencies.txt","data.accdb")
 currency_request.create_database()
@@ -341,15 +426,25 @@ Thread(target=currency_request.update_access).start()
 
 status_getters = [
     currency_request.coinex_status,
-
+    currency_request.bibox_status,
+    currency_request.mexc_status,
 ] 
 
-# Thread(target=currency_request.mexc).start()
-# Thread(target=currency_request.hotbit).start()
-# Thread(target=currency_request.gate).start()
-# Thread(target=currency_request.xt).start()
-# Thread(target=currency_request.biture).start()
-# Thread(target=currency_request.lbank).start()
-# Thread(target=currency_request.phemex).start()
-# Thread(target=currency_request.coinex).start()
-Thread(target=currency_request.coinex_status).start()
+Thread(target=currency_request.mexc).start()
+Thread(target=currency_request.hotbit).start()
+Thread(target=currency_request.gate).start()
+Thread(target=currency_request.xt).start()
+Thread(target=currency_request.biture).start()
+Thread(target=currency_request.lbank).start()
+Thread(target=currency_request.phemex).start()
+Thread(target=currency_request.coinex).start()
+Thread(target=currency_request.bibiox).start()
+
+while True:
+    for method in status_getters:
+        method()
+    time.sleep(3600)
+    
+
+
+
