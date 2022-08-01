@@ -23,6 +23,7 @@ class CurrencyRequest:
             "LBANK":{},
             "PHEMEX":{},
         }            
+        # set time sleep for each currancy request duration
         self.sleep_time = 0
         # database file absolute path
         file_path = os.path.abspath(access_file)
@@ -46,6 +47,10 @@ class CurrencyRequest:
                 # names like BTC, PIL, SHIB ,...
                 self.allowed_names = {name.split(
                     "/")[0] for name in allowed_currencies}
+
+        with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
+            for currency in request.json().get("data"):
+                self.allowed_currencies.append(currency.get("symbol"))
     def create_database(self):
         with pyodbc.connect(self.connection_string) as connection:
             with connection.cursor() as cursor:
@@ -59,7 +64,7 @@ class CurrencyRequest:
                         xt VARCHAR,
                         gate VARCHAR,
                         phemex VARCHAR,
-                        [percentage difference] VARCHAR
+                        [percentage difference] NUMBER
                         )"""
                     cursor.execute(query)
                     connection.commit()
@@ -109,7 +114,7 @@ class CurrencyRequest:
                                         """
                             cursor.execute(query)
                             connection.commit()
-                    time.sleep(5)
+                    time.sleep(3)
 
     def options(self, hidden: bool = True):
 
@@ -267,7 +272,7 @@ class CurrencyRequest:
                 expected_elements.update({currency: price_element})
         while True:
             for currency, price_element in expected_elements.items():
-                price = price_element.text
+                price = number_rounder(float(price_element.text))
                 self.data.get("PHEMEX").update({currency: price})
             
             time.sleep(self.sleep_time)
