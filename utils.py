@@ -24,7 +24,6 @@ def percatge_difference(list_of_numbers:list):
             break
         else:
             row.remove(max_value)
-
     return round(result,2)
 
 
