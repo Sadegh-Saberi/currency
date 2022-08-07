@@ -238,40 +238,55 @@ class CurrencyRequest:
         base_url = 'https://api.lbkex.com/'
         path = 'v1/ticker.do'
         params = {'symbol':'all'}
-        driver = Chrome(options=self.options())
-        action = ActionChains(driver)
-        driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
-        search_box = WebDriverWait(driver,5).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
+
+        # allowed_scraping_currencies = self.allowed_currencies.copy()
 
         while True:
             try:
-                request = requests.get(base_url+path,params=params)
-                allowed_currencies = self.allowed_currencies.copy()
-                currencies = request.json()
+                response = requests.get(base_url+path,params=params)
+                currencies = response.json()
                 for currency in currencies:
                     symbol = currency['symbol'].upper() 
-                    if symbol in allowed_currencies:
+                    if symbol in self.allowed_currencies:
                         currency_index = self.allowed_currencies.index(symbol)
                         price = number_rounder(currency['ticker']['latest'])
                         self.data.get("LBANK").update({self.allowed_currencies[currency_index]:price})
-                        allowed_currencies.remove(symbol)
+                        # allowed_scraping_currencies.remove(symbol)
 
             except: print("lbank request failed!")
-            print('lbank request updated')
+            # print('lbank request updated')
 
 
-            for currency in allowed_currencies:
+    def lbank_scraping(self):
+        base_url = 'https://api.lbkex.com/'
+        path = 'v1/ticker.do'
+        params = {'symbol':'all'}
+        api_currencies = list()
+        with requests.get(base_url+path,params=params) as response:
+            for currency in response.json():
+                api_currencies.append(currency.get("symbol").upper())
+
+        
+        allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]
+        print(allowed_scraping_currencies)
+            
+        driver = Chrome(options=self.options(hidden=False))
+        action = ActionChains(driver)
+        driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
+        search_box = WebDriverWait(driver,2).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
+        while True:
+            for currency in allowed_scraping_currencies:
                 search_box.clear()
-                search_box.send_keys(currency.replace('_','/'))                
+                search_box.send_keys(currency.replace('_','/'))
                 try:
-
-                    first_search_result = WebDriverWait(driver,0.5).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    first_search_result = WebDriverWait(driver,5).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
                     action.click(first_search_result).perform()
-                    price = WebDriverWait(driver,3).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
+                    price = WebDriverWait(driver,5).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
                     self.data.get("LBANK").update({currency:price})
-                except: pass
+                    print(currency,"accepted :)")
+                except: allowed_scraping_currencies.remove(currency); print(currency,"deleted!")
             print("lbank scraping updated")
-            time.sleep(self.sleep_time)
+            print(allowed_scraping_currencies)
             
 
     
@@ -538,9 +553,10 @@ Thread(target=currency_request.gate).start()
 Thread(target=currency_request.coinex).start()
 Thread(target=currency_request.bibiox).start()
 Thread(target=currency_request.xt).start()
-Thread(target=currency_request.hotbit).start()
-Thread(target=currency_request.biture).start()
+# Thread(target=currency_request.hotbit).start()
+# Thread(target=currency_request.biture).start()
 Thread(target=currency_request.lbank).start()
+Thread(target=currency_request.lbank_scraping).start()
 Thread(target=currency_request.phemex).start()
 
 while True:
