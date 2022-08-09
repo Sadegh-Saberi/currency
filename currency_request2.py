@@ -17,7 +17,9 @@ class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,access_file:str):
         self.data = {
             "MEXC":{},
+            "MEXC_FULL_NAME":{},
             "MEXC_STATUS":{},
+            "MEXC_CHANGE_PERCENT_SIGN":{},
             "MEXC_CHANGE_PERCENT":{},
             "XT":{},
             "XT_STATUS":{},
@@ -65,17 +67,18 @@ class CurrencyRequest:
                 try:
                     query = """CREATE TABLE currencies 
                         ([currency name] VARCHAR,
-                        mexc VARCHAR,
+                        mexc NUMBER,
+                        mexc_full_name VARCHAR,
                         mexc_status VARCHAR,
-                        lbank VARCHAR,
-                        xt VARCHAR,
+                        lbank NUMBER,
+                        xt NUMBER,
                         xt_status VARCHAR,
-                        gate VARCHAR,
+                        gate NUMBER,
                         gate_status VARCHAR,
-                        phemex VARCHAR,
-                        coinex VARCHAR,
+                        phemex NUMBER,
+                        coinex NUMBER,
                         coinex_status VARCHAR,
-                        bibox VARCHAR,
+                        bibox NUMBER,
                         bibox_status VARCHAR,
                         [percentage difference] NUMBER
                         )"""
@@ -138,7 +141,7 @@ class CurrencyRequest:
                                         """
                             cursor.execute(query)
                             connection.commit()
-                    time.sleep(10)
+                    time.sleep(3)
 
     def update_access2(self):
         with pyodbc.connect(self.connection_string) as connection:
@@ -147,18 +150,20 @@ class CurrencyRequest:
                     query = """
                         CREATE TABLE currencies2
                             ([currency name] VARCHAR,
-                            mexc VARCHAR,
-                            mexc_change_percent VARCHAR,
+                            mexc NUMBER,
+                            mexc_full_name VARCHAR,
+                            mexc_change_percent_sign VARCHAR,
+                            mexc_change_percent NUMBER,
                             mexc_status VARCHAR,
-                            lbank VARCHAR,
-                            xt VARCHAR,
+                            lbank NUMBER,
+                            xt NUMBER,
                             xt_status VARCHAR,
-                            gate VARCHAR,
+                            gate NUMBER,
                             gate_status VARCHAR,
-                            phemex VARCHAR,
-                            coinex VARCHAR,
+                            phemex NUMBER,
+                            coinex NUMBER,
                             coinex_status VARCHAR,
-                            bibox VARCHAR,
+                            bibox NUMBER,
                             bibox_status VARCHAR,
                             [percentage difference] NUMBER
                             )
@@ -166,6 +171,10 @@ class CurrencyRequest:
                     cursor.execute(query)
                     connection.commit()
                 except: pass
+                finally:
+                    query = "DELETE FROM currencies2;"
+                    cursor.execute(query)
+                    connection.commit
                 while True:
                     for exchange, value in list(self.data.items()):
                         for currency_name, price in list(value.items()):
@@ -211,7 +220,7 @@ class CurrencyRequest:
                                         """
                             cursor.execute(query)
                             connection.commit()
-                    time.sleep(10)
+                    time.sleep(3)
     # def update_access(self,data:dict):
     #     with pyodbc.connect(self.connection_string) as connection:
     #         with connection.cursor() as cursor:
@@ -298,55 +307,60 @@ class CurrencyRequest:
                 currencies = response.json()['data']
                 for pair_currency in currencies:
                     symbol = pair_currency.get('symbol')
-                    # try:
+
                     _str_change_percent = change_percent_data.get(symbol.replace("_",""))
                     try:
-                        change_percent = float(_str_change_percent)*100
-                        if symbol in self.allowed_currencies and change_percent > 5 or change_percent < -5:
-                            price = number_rounder(float(pair_currency['last']))
-                            self.data.get("MEXC").update({symbol:price})
-                            self.data.get("MEXC_CHANGE_PERCENT").update({symbol:f"{number_rounder(change_percent)}%"})
-                            # print(symbol)
-                    except:pass
+                        if _str_change_percent != None:
+                            change_percent = float(_str_change_percent)*100
+                            if symbol in self.allowed_currencies and change_percent >= 5 or change_percent <= -5:
+                                price = number_rounder(float(pair_currency['last']))
+                                self.data.get("MEXC").update({symbol:price})
+                                sign = "+" if change_percent >= 0 else "-"
+                                self.data.get("MEXC_CHANGE_PERCENT_SIGN").update({symbol:sign})
+                                self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})
+                    except:print("mexc failed")
             time.sleep(self.sleep_time)
     
-    def mexc(self):        
-        "document: https://mxcdevelop.github.io/APIDoc/open.api.v2.en.html#ticker-information"
-        base_url = 'https://www.mexc.com/'
-        prices_path = '/open/api/v2/market/ticker'
+    # def mexc(self):        
+    #     "document: https://mxcdevelop.github.io/APIDoc/open.api.v2.en.html#ticker-information"
+    #     base_url = 'https://www.mexc.com'
+    #     prices_path = '/open/api/v2/market/ticker'
 
-        while True:
-            try:
-                with requests.get(base_url+prices_path) as response:
-                    currencies = response.json()['data']
-                    # data = {}
-                    for pair_currency in currencies:
-                        symbol = pair_currency['symbol']
-                        if symbol in self.allowed_currencies:
-                            price = number_rounder(float(pair_currency['last']))
-                            # self.data.get("MEXC").update({symbol:price})
-                            # print({"MEXC":{symbol:price}})
-                            # data.update({symbol:price})
-                            yield {symbol:price}
-                    # self.update_access({"MEXC":data})
-            except: print("mexc request failed!")
-            time.sleep(self.sleep_time)
+    #     while True:
+    #         try:
+    #             with requests.get(base_url+prices_path) as response:
+    #                 currencies = response.json()['data']
+    #                 # data = {}
+    #                 for pair_currency in currencies:
+    #                     symbol = pair_currency['symbol']
+    #                     if symbol in self.allowed_currencies:
+    #                         price = number_rounder(float(pair_currency['last']))
+    #                         # self.data.get("MEXC").update({symbol:price})
+    #                         # print({"MEXC":{symbol:price}})
+    #                         # data.update({symbol:price})
+    #                         print({symbol:price})
+    #                         yield {symbol:price}
+    #                 # self.update_access({"MEXC":data})
+    #         except: print("mexc request failed!")
+    #         time.sleep(self.sleep_time)
 
 
     
     def mexc_status(self):
         base_url = 'https://www.mexc.com/'
-        withdraw_deposit_path = "/open/api/v2/market/coin/list"
+        withdraw_deposit_path = "open/api/v2/market/coin/list/"
         while True:
             try:
-                with requests.get(base_url+withdraw_deposit_path) as first:
-                    currencies_status = first.json().get("data")
+                with requests.get(base_url+withdraw_deposit_path) as response:
+                    currencies_status = response.json().get("data")
 
                 for allowed_currency in self.allowed_currencies:
                     expected_currency = allowed_currency.split("_")[0]
                     for currency in currencies_status:
                         currency_name = currency.get('currency')
                         if currency_name == expected_currency:
+                            full_name = currency.get("full_name")
+                            self.data.get("MEXC_FULL_NAME").update({allowed_currency:full_name})
                             # get the first coin for testing ...
                             chain = currency.get('coins')[0]
                             status  = 'w' if chain.get('is_withdraw_enabled') == True else '' 
@@ -416,25 +430,27 @@ class CurrencyRequest:
 
         
         allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]
-        print(allowed_scraping_currencies)
+        # print(allowed_scraping_currencies)
             
-        driver = Chrome(options=self.options(hidden=False))
+        driver = Chrome(options=self.options())
         action = ActionChains(driver)
         driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
-        search_box = WebDriverWait(driver,2).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
+        search_box = WebDriverWait(driver,30).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
         while True:
             for currency in allowed_scraping_currencies:
                 search_box.clear()
                 search_box.send_keys(currency.replace('_','/'))
                 try:
-                    first_search_result = WebDriverWait(driver,5).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    first_search_result = WebDriverWait(driver,0.25).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
                     action.click(first_search_result).perform()
                     price = WebDriverWait(driver,5).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
                     self.data.get("LBANK").update({currency:price})
-                    print(currency,"accepted :)")
-                except: allowed_scraping_currencies.remove(currency); print(currency,"deleted!")
+                    # print(currency,"accepted :)")
+                except:
+                    # allowed_scraping_currencies.remove(currency); print(currency,"deleted!")
+                    pass
             print("lbank scraping updated")
-            print(allowed_scraping_currencies)
+            # print(allowed_scraping_currencies)
             
 
     
@@ -453,8 +469,6 @@ class CurrencyRequest:
                         float_price = float(currency.get('filters')[0].get('maxPrice'))*(1/10)
                         price = number_rounder(float_price)
                         self.data.get("BITURE").update({self.allowed_currencies[currency_index]:price})
-                        # expected_currencies.update({self.allowed_currencies[currency_index]:price})
-
             except: print("biture request failed!")
             time.sleep(self.sleep_time)
 
@@ -515,10 +529,9 @@ class CurrencyRequest:
                 response = requests.get(host+perfix+url)
                 currencies = response.json()
                 for symbol, value in currencies.items():
-                    if symbol.upper() in self.allowed_currencies:
+                    if symbol.upper() in self.allowed_currencies and value.get("price") != None:
                         price = number_rounder(value.get("price"))
                         self.data.get("XT").update({symbol:price})
-                time.sleep(self.sleep_time)
             except: print("xt request failed!")
             time.sleep(self.sleep_time)
 
@@ -530,6 +543,7 @@ class CurrencyRequest:
             try:
                 response = requests.get(base_url+path)
                 currencies = response.json()
+                
                 for allowed_currency in self.allowed_currencies:
                     allowed_single_currency = allowed_currency.split("_")[0]
                     for currency in currencies:
@@ -693,10 +707,12 @@ with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
                 break
             except: pass
         else: all_allowed_currencies.append(symbol)
+# print(all_allowed_currencies)
 
 
 currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"data.accdb")
 currency_request.create_database()
+
 Thread(target=currency_request.update_access2).start()
 Thread(target=currency_request.update_access).start()
 
