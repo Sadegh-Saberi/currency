@@ -1,18 +1,32 @@
-from threading import Thread
-import requests
-import pyodbc
-from utils import percatge_difference, number_rounder
+### selenium imports ###
 from selenium.webdriver import Chrome, ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ChromeOptions
+### requests imports ###
+import requests
+### bibox status imports ###
 import hashlib
 import hmac
 import json
-import time
 import os
+### threading imports ###
+from threading import Thread
+### access database imports ###
+import pyodbc
+### created custom functions imports ###
+from utils import percentage_difference, number_rounder
+### time imports ###
+import time
+### python telegram bot imports ###
+from telegram.ext import Application
+user_ids = [302546305]
 
+
+
+application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").build()
+### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,access_file:str):
         self.data = {
@@ -67,9 +81,9 @@ class CurrencyRequest:
                 try:
                     query = """CREATE TABLE currencies 
                         ([currency name] VARCHAR,
-                        mexc NUMBER,
                         mexc_full_name VARCHAR,
                         mexc_status VARCHAR,
+                        mexc NUMBER,
                         lbank NUMBER,
                         xt NUMBER,
                         xt_status VARCHAR,
@@ -113,30 +127,20 @@ class CurrencyRequest:
 
                     query = "SELECT * FROM currencies"
                     rows = cursor.execute(query).fetchall()
-                    expected_rows_values = []
                     for row in rows:
-                        temperory_list = []
-                        for price in row[1:-1]:
+                        expected_row_values = []
+                        for item in row[3:-1]:
                             try:
-                                temperory_list.append(float(price))
+                                expected_row_values.append(float(item))
                             except: pass
 
-                        # try:
-                        #     temperory_list.pop(1)
-                        # except: pass
-                        expected_rows_values.append(temperory_list)
-
-                    for row in expected_rows_values:
-                        # get the row index in 'expected_rows_values' list
-                        row_index = expected_rows_values.index(row)
-                        # get the row currency name for adding the percentage difference data
-                        currency_name = rows[row_index][0]
-                        # if more that one price is in the row ...
-                        if len(row) > 1:
-                            result = percatge_difference(row)
+                        if len(expected_row_values) > 1:
+                            
+                            p_difference = percentage_difference(expected_row_values)
+                            currency_name = row[0]
                             query = f"""
                                         UPDATE currencies
-                                        SET [percentage difference] = '{result}'
+                                        SET [percentage difference] = '{p_difference}'
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
@@ -150,10 +154,10 @@ class CurrencyRequest:
                     query = """
                         CREATE TABLE currencies2
                             ([currency name] VARCHAR,
-                            mexc NUMBER,
                             mexc_full_name VARCHAR,
                             mexc_change_percent_sign VARCHAR,
                             mexc_change_percent NUMBER,
+                            mexc NUMBER,
                             mexc_status VARCHAR,
                             lbank NUMBER,
                             xt NUMBER,
@@ -178,8 +182,6 @@ class CurrencyRequest:
                 while True:
                     for exchange, value in list(self.data.items()):
                         for currency_name, price in list(value.items()):
-                            # try:
-
                                 query = f"SELECT * FROM currencies2 WHERE [currency name] = '{currency_name}'"
                                 if cursor.execute(query).fetchone() == None and exchange == "MEXC":
                                     query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency_name}')"
@@ -195,78 +197,30 @@ class CurrencyRequest:
 
                     query = "SELECT * FROM currencies2"
                     rows = cursor.execute(query).fetchall()
-                    expected_rows_values = []
+
                     for row in rows:
-                        temperory_list = []
-                        for price in row[1:-1]:
+                        expected_row_values = []
+                        for item in row[4:-1]:
                             try:
-                                temperory_list.append(float(price))
+                                expected_row_values.append(float(item))
                             except: pass
 
-                        expected_rows_values.append(temperory_list)
-
-                    for row in expected_rows_values:
-                        # get the row index in 'expected_rows_values' list
-                        row_index = expected_rows_values.index(row)
-                        # get the row currency name for adding the percentage difference data
-                        currency_name = rows[row_index][0]
-                        # if more that one price is in the row ...
-                        if len(row) > 1:
-                            result = percatge_difference(row)
+                        if len(expected_row_values) > 1:
+                            
+                            p_difference = percentage_difference(expected_row_values)
+                            currency_name = row[0]
                             query = f"""
                                         UPDATE currencies2
-                                        SET [percentage difference] = '{result}'
+                                        SET [percentage difference] = '{p_difference}'
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
                             connection.commit()
+
                     time.sleep(3)
-    # def update_access(self,data:dict):
-    #     with pyodbc.connect(self.connection_string) as connection:
-    #         with connection.cursor() as cursor:
 
-    #                 for exchange, value in list(data.items()):
-    #                     for currency_name, price in list(value.items()):
-    #                         query = f"""UPDATE currencies
-    #                                 SET {exchange.lower()} = '{price}'
-    #                                 WHERE [currency name] = '{currency_name}';"""
-    #                         cursor.execute(query)
-    #                         connection.commit()
-
-    #                 query = "SELECT * FROM currencies"
-    #                 rows = cursor.execute(query).fetchall()
-    #                 expected_rows_values = []
-    #                 for row in rows:
-    #                     temperory_list = []
-    #                     for price in row[1:-1]:
-    #                         try:
-    #                             temperory_list.append(float(price))
-    #                         except: pass
-
-    #                     # try:
-    #                     #     temperory_list.pop(1)
-    #                     # except: pass
-    #                     expected_rows_values.append(temperory_list)
-
-    #                 for row in expected_rows_values:
-    #                     # get the row index in 'expected_rows_values' list
-    #                     row_index = expected_rows_values.index(row)
-    #                     # get the row currency name for adding the percentage difference data
-    #                     currency_name = rows[row_index][0]
-    #                     # if more that one price is in the row ...
-    #                     if len(row) > 1:
-    #                         result = percatge_difference(row)
-    #                         query = f"""
-    #                                     UPDATE currencies
-    #                                     SET [percentage difference] = '{result}'
-    #                                     WHERE [currency name] = '{currency_name}';
-    #                                     """
-    #                         cursor.execute(query)
-    #                         connection.commit()
-    #                 time.sleep(10)
 
     def options(self, hidden: bool = True):
-
         prefs = {'profile.default_content_setting_values': {'images': 2,
                                                             'plugins': 2, 'popups': 2, 'geolocation': 2,
                                                             'notifications': 2, 'auto_select_certificate': 2, 'fullscreen': 2,
@@ -312,12 +266,13 @@ class CurrencyRequest:
                     try:
                         if _str_change_percent != None:
                             change_percent = float(_str_change_percent)*100
-                            if symbol in self.allowed_currencies and change_percent >= 5 or change_percent <= -5:
-                                price = number_rounder(float(pair_currency['last']))
-                                self.data.get("MEXC").update({symbol:price})
-                                sign = "+" if change_percent >= 0 else "-"
-                                self.data.get("MEXC_CHANGE_PERCENT_SIGN").update({symbol:sign})
-                                self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})
+                            if symbol in self.allowed_currencies:
+                                if change_percent >= 5 or change_percent <= -5:
+                                    price = number_rounder(float(pair_currency['last']))
+                                    self.data.get("MEXC").update({symbol:price})
+                                    sign = "+" if change_percent >= 0 else "-"
+                                    self.data.get("MEXC_CHANGE_PERCENT_SIGN").update({symbol:sign})
+                                    self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})  
                     except:print("mexc failed")
             time.sleep(self.sleep_time)
     
@@ -725,14 +680,6 @@ status_getters = [
     
 ] 
 
-# # mexc_data = {}
-# for symbol_data in currency_request.mexc():
-#     mexc_data.update(symbol_data)
-#     print(symbol_data)
-# print(mexc_data)
-# currency_request.update_access({"MEXC":mexc_data})
-
-# Thread(target=currency_request.mexc).start()
 
 Thread(target=currency_request.mexc_price_change).start()
 Thread(target=currency_request.gate).start()

@@ -11,7 +11,7 @@ def number_rounder(number:float):
     else: return int(number)
 
 
-def percatge_difference(list_of_numbers:list):
+def percentage_difference(list_of_numbers:list):
     row = list_of_numbers
     while True:
         min_value, max_value = min(row), max(row)
@@ -20,13 +20,11 @@ def percatge_difference(list_of_numbers:list):
         except ZeroDivisionError:
             row.remove(min_value)
             continue
+        # correct result
         if result < 200:
             break
+        # delete the maximum number and try again
         else:
             row.remove(max_value)
+    # return rounded result with 2 decimal place
     return round(result,2)
-
-
-
-
-
