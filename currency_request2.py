@@ -13,6 +13,8 @@ import json
 import os
 ### threading imports ###
 from threading import Thread
+### async imports ###
+import asyncio
 ### access database imports ###
 import pyodbc
 ### created custom functions imports ###
@@ -21,11 +23,12 @@ from utils import percentage_difference, number_rounder
 import time
 ### python telegram bot imports ###
 from telegram.ext import Application
-user_ids = [302546305]
 
 
+### telegram bot configurations ###
+application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").build()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,access_file:str):
@@ -203,11 +206,16 @@ class CurrencyRequest:
                         for item in row[4:-1]:
                             try:
                                 expected_row_values.append(float(item))
-                            except: pass
+                            except: print("telegram bot failed")
 
                         if len(expected_row_values) > 1:
-                            
                             p_difference = percentage_difference(expected_row_values)
+                            if row[3] >=20 and p_difference >= 5:
+                                while True:
+                                    try:
+                                        asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {row[3]}\nدرصد اختلاف:    {p_difference}"))
+                                        break
+                                    except: pass
                             currency_name = row[0]
                             query = f"""
                                         UPDATE currencies2
