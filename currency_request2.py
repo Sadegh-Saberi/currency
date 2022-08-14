@@ -1,4 +1,5 @@
 ### selenium imports ###
+import sqlite3
 from selenium.webdriver import Chrome, ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -31,31 +32,18 @@ asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
-    def __init__(self,allowed_currencies_file:str,extra_currencies:list,access_file:str):
-        self.data = {
-            "MEXC":{},
-            "MEXC_FULL_NAME":{},
-            "MEXC_STATUS":{},
-            "MEXC_CHANGE_PERCENT_SIGN":{},
-            "MEXC_CHANGE_PERCENT":{},
-            "XT":{},
-            "XT_STATUS":{},
-            "GATE":{},
-            "GATE_STATUS":{},
-            "LBANK":{},
-            "PHEMEX":{},
-            "COINEX":{},
-            "COINEX_STATUS":{},
-            "BIBOX":{},
-            "BIBOX_STATUS":{},
-        }            
+    def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
+
+        with sqlite3.connect(database=database) as connection:
+            self.connection = connection
+           
         # set time sleep for each currancy request duration
         self.sleep_time = 3
         # database file absolute path
-        file_path = os.path.abspath(access_file)
+        # file_path = os.path.abspath(access_file)
         # the string connection for connection to access database
-        self.connection_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};' \
-            fr'DBQ={file_path};'
+        # self.connection_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};' \
+            # fr'DBQ={file_path};'
         with open(allowed_currencies_file, "r") as file:
 
 
@@ -79,53 +67,48 @@ class CurrencyRequest:
         self.allowed_currencies.extend(extra_currencies)  
 
     def create_database(self):
-        with pyodbc.connect(self.connection_string) as connection:
-            with connection.cursor() as cursor:
-                try:
-                    query = """CREATE TABLE currencies 
-                        ([currency name] VARCHAR,
-                        mexc_full_name VARCHAR,
-                        mexc_status VARCHAR,
-                        mexc NUMBER,
-                        lbank NUMBER,
-                        xt NUMBER,
-                        xt_status VARCHAR,
-                        gate NUMBER,
-                        gate_status VARCHAR,
-                        phemex NUMBER,
-                        coinex NUMBER,
-                        coinex_status VARCHAR,
-                        bibox NUMBER,
-                        bibox_status VARCHAR,
-                        [percentage difference] NUMBER
-                        )"""
+        with self.connection.cursor() as cursor:
+            try:
+                query = """CREATE TABLE currencies 
+                    ([currency name] TEXT,
+                    mexc_full_name TEXT,
+                    mexc_status TEXT,
+                    mexc NUMBER,
+                    lbank NUMBER,
+                    xt NUMBER,
+                    xt_status TEXT,
+                    gate NUMBER,
+                    gate_status TEXT,
+                    phemex NUMBER,
+                    coinex NUMBER,
+                    coinex_status TEXT,
+                    bibox NUMBER,
+                    bibox_status TEXT,
+                    [percentage difference] NUMBER
+                    )"""
+                cursor.execute(query)
+            except:
+                print("tables are already created!")
+            finally:
+                # delete all rows in the database
+                query = f"DELETE FROM currencies;"
+                cursor.execute(query)
+                # insert currencies name into the database
+                for currency in self.allowed_currencies:
+                    query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
                     cursor.execute(query)
-                    connection.commit()
-                except:
-                    print("tables are already created!")
-                finally:
-                    # delete all rows in the database
-                    query = f"DELETE FROM currencies;"
-                    cursor.execute(query)
-                    connection.commit()
-                    # insert currencies name into the database
-                    for currency in self.allowed_currencies:
-                        query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
-                        cursor.execute(query)
-                        connection.commit()
+                self.connection.commit()
 
-    def update_access(self):
+    def update_sql(self,data:dict):
         with pyodbc.connect(self.connection_string) as connection:
             with connection.cursor() as cursor:
-                while True:
-                    for exchange, value in list(self.data.items()):
+                    for exchange, value in list(data.items()):
                         for currency_name, price in list(value.items()):
                             try:
                                 query = f"""UPDATE currencies
                                         SET {exchange.lower()} = '{price}'
                                         WHERE [currency name] = '{currency_name}';"""
                                 cursor.execute(query)
-                                connection.commit()
                             except: pass
 
                     query = "SELECT * FROM currencies"
@@ -147,8 +130,8 @@ class CurrencyRequest:
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-                            connection.commit()
-                    time.sleep(3)
+
+                    connection.commit()
 
     def update_access2(self):
         with pyodbc.connect(self.connection_string) as connection:
@@ -251,6 +234,7 @@ class CurrencyRequest:
             options.add_argument("--start-maximized")
         return options
 
+
     def mexc_price_change(self):        
         "document: https://mxcdevelop.github.io/APIDoc/open.api.v2.en.html#ticker-information"
         base_url = 'https://www.mexc.com/'
@@ -269,7 +253,6 @@ class CurrencyRequest:
                 currencies = response.json()['data']
                 for pair_currency in currencies:
                     symbol = pair_currency.get('symbol')
-
                     _str_change_percent = change_percent_data.get(symbol.replace("_",""))
                     try:
                         if _str_change_percent != None:
@@ -277,10 +260,13 @@ class CurrencyRequest:
                             if symbol in self.allowed_currencies:
                                 if change_percent >= 5 or change_percent <= -5:
                                     price = number_rounder(float(pair_currency['last']))
-                                    self.data.get("MEXC").update({symbol:price})
+                                    # self.data.get("MEXC").update({symbol:price})
+                                    self.update_sql({"MEXC":{symbol:price}})
                                     sign = "+" if change_percent >= 0 else "-"
-                                    self.data.get("MEXC_CHANGE_PERCENT_SIGN").update({symbol:sign})
-                                    self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})  
+                                    # self.data.get("MEXC_CHANGE_PERCENT_SIGN").update({symbol:sign})
+                                    self.update_sql({"MEXC_PERCENT_SIGN":{symbol:sign}})
+                                    # self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})  
+                                    self.update_sql({"MEXC_CHANGE_PERCENT":{symbol:number_rounder(abs(change_percent))}}) 
                     except:print("mexc failed")
             time.sleep(self.sleep_time)
     
@@ -673,11 +659,11 @@ with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
 # print(all_allowed_currencies)
 
 
-currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"data.accdb")
+currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"database.sql")
 currency_request.create_database()
 
-Thread(target=currency_request.update_access2).start()
-Thread(target=currency_request.update_access).start()
+# Thread(target=currency_request.update_access2).start()
+# Thread(target=currency_request.update_access).start()
 
 status_getters = [
     currency_request.mexc_status,
@@ -690,15 +676,15 @@ status_getters = [
 
 
 Thread(target=currency_request.mexc_price_change).start()
-Thread(target=currency_request.gate).start()
-Thread(target=currency_request.coinex).start()
-Thread(target=currency_request.bibiox).start()
-Thread(target=currency_request.xt).start()
-Thread(target=currency_request.lbank).start()
-Thread(target=currency_request.lbank_scraping).start()
-Thread(target=currency_request.phemex).start()
+# Thread(target=currency_request.gate).start()
+# Thread(target=currency_request.coinex).start()
+# Thread(target=currency_request.bibiox).start()
+# Thread(target=currency_request.xt).start()
+# Thread(target=currency_request.lbank).start()
+# Thread(target=currency_request.lbank_scraping).start()
+# Thread(target=currency_request.phemex).start()
 
-while True:
-    for method in status_getters:
-        Thread(target=method).start()
-    time.sleep(300)
+# while True:
+#     for method in status_getters:
+#         Thread(target=method).start()
+#     time.sleep(300)
