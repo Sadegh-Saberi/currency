@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+
+
+{% block tbody %}
+    {% for currency in currencies %}
+    <tr>
+        {% for item in currency %}
+            <td>{{item}}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+{% endblock %}

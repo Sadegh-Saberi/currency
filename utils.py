@@ -1,4 +1,4 @@
-def number_rounder(number:float):
+def number_rounder(number:float) -> str:
     # if the number is not 1, 2, 3 ...
     if int(number) != number:
         # separate the number into two parts (integer part and decimal part)
@@ -8,10 +8,10 @@ def number_rounder(number:float):
         zeros = len(decimal) - len(decimal.strip("0"))
         # add rstrip method for handling numbers like this -> 1.300002 to not convert to this -> 1.300 
         return (integer+"."+decimal[:zeros+3]).rstrip("0")
-    else: return int(number)
+    else: return str(number)
 
 
-def percentage_difference(list_of_numbers:list):
+def percentage_difference(list_of_numbers:list) -> float:
     row = list_of_numbers
     while True:
         min_value, max_value = min(row), max(row)

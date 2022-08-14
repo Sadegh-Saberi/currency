@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="refresh" content="5">
+        <link rel="stylesheet" href="{{ url_for('static',filename='stylesheet/style.css') }}">
+    </head>
+    <body>
+        <table>
+            <thead>
+                {% block thead %}
+                {% endblock %}
+            </thead>
+            <tbody>
+                {% block tbody %}
+                {% endblock %}
+            </tbody>
+        </table>
+    </body>
+</html>
