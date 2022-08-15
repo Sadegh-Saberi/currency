@@ -24,12 +24,11 @@ from utils import percentage_difference, number_rounder
 import time
 ### python telegram bot imports ###
 from telegram.ext import Application
-
-
 ### telegram bot configurations ###
-application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
+# application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+### ###
+## ## ##
 import os
 file_path = "database.sqlite"
 if os.path.isfile(file_path):

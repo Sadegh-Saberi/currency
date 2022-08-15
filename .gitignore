@@ -4,6 +4,8 @@
 ### Custom ###
 test*.py
 /unwanted files
+notes.txt
+*.sqlite
 
 
 ### Python ###
