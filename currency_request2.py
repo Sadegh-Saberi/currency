@@ -16,8 +16,6 @@ import os
 from threading import Thread
 ### async imports ###
 import asyncio
-### access database imports ###
-import pyodbc
 ### created custom functions imports ###
 from utils import percentage_difference, number_rounder
 ### time imports ###
@@ -40,7 +38,7 @@ class CurrencyRequest:
         self.database = database
            
         # set time sleep for each currancy request duration
-        self.sleep_time = 3
+        self.sleep_time = 0
         # database file absolute path
         # file_path = os.path.abspath(access_file)
         # the string connection for connection to access database
@@ -196,22 +194,22 @@ class CurrencyRequest:
 
                 if len(expected_row_values) > 1:
                     p_difference = percentage_difference(expected_row_values)
-                    try:
-                        change_percent = float(row[3])
+                    # try:
+                        # change_percent = float(row[3])
                         # if change_percent >=20 and p_difference >= 5:
                             # while True:
                             #     try:
                             #         # asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {row[3]}\nدرصد اختلاف:    {p_difference}"))
                             #         break
                             #     except: pass
-                        currency_name = row[0]
-                        query = f"""
-                                    UPDATE currencies2
-                                    SET [percentage difference] = '{p_difference}'
-                                    WHERE [currency name] = '{currency_name}';
-                                    """
-                        cursor.execute(query)
-                    except: print(f"change_percent: {change_percent}, p_differenece: {p_difference}")
+                    currency_name = row[0]
+                    query = f"""
+                                UPDATE currencies2
+                                SET [percentage difference] = '{p_difference}'
+                                WHERE [currency name] = '{currency_name}';
+                                """
+                    cursor.execute(query)
+                    # except: print(f"change_percent: {change_percent}, p_differenece: {p_difference}")
         connection.commit()
 
 
@@ -722,9 +720,9 @@ currency_request.create_sqlite2()
 status_getters = [
     currency_request.mexc_status,
     currency_request.gate_status,
+    currency_request.xt_status,
     currency_request.coinex_status,
     currency_request.bibox_status,
-    currency_request.xt_status,
 ] 
 
 

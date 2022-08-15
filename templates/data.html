@@ -6,7 +6,11 @@
     {% for currency in currencies %}
     <tr>
         {% for item in currency %}
-            <td>{{item}}</td>
+            {% if item != None %}
+                <td>{{item}}</td>
+            {% else %}
+                <td>--</td>
+            {% endif %}
         {% endfor %}
     </tr>
     {% endfor %}
