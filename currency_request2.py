@@ -136,11 +136,8 @@ class CurrencyRequest:
 
                 for currency in self.allowed_currencies:
                     no_dash_currency = currency.replace("_","")
-                    print(no_dash_currency)
-                    print(abs(change_percent_data.get(no_dash_currency)*100))
                     if abs(change_percent_data.get(no_dash_currency)*100) >= 5 and no_dash_currency in list(change_percent_data.keys()):
                         query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
-                        print(query)
                         cursor.execute(query)
             except:
                 print("table currency2 is already created!")
