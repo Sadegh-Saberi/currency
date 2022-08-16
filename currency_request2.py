@@ -1,5 +1,4 @@
 ### selenium imports ###
-import sqlite3
 from selenium.webdriver import Chrome, ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,53 +15,42 @@ import os
 from threading import Thread
 ### async imports ###
 import asyncio
-### created custom functions imports ###
-from utils import percentage_difference, number_rounder
+### database imports ###
+import sqlite3
 ### time imports ###
 import time
 ### python telegram bot imports ###
 from telegram.ext import Application
 ### telegram bot configurations ###
-# application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
+application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
 # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-### ###
-## ## ##
-import os
+### created custom functions imports ###
+from utils import percentage_difference, number_rounder
+### local environment imports ###
+from dotenv import load_dotenv
+
+
+
 file_path = "database.sqlite"
 if os.path.isfile(file_path):
-  os.remove(file_path)
+    os.remove(file_path)
 
+load_dotenv()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
         self.database = database
-           
-        # set time sleep for each currancy request duration
-        self.sleep_time = 0
-        # database file absolute path
-        # file_path = os.path.abspath(access_file)
-        # the string connection for connection to access database
-        # self.connection_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};' \
-            # fr'DBQ={file_path};'
+        
         with open(allowed_currencies_file, "r") as file:
-
-
             # an allowed currency has 2 parts separated with '/' (slash) containing the name and the price of the currency
             allowed_currencies = {currency.upper() for currency in file.read().replace(
                 " ", "").replace("\n", ",").replace("/","_").split(",") if currency != ''}  # read the data in the text file and convert them to the list of wnated currencies
-
-            try:
-                # remove the empty string items from the set
+            if "" in allowed_currencies:
                 allowed_currencies.remove("")
-            except:
-                pass
-            finally:
-                # names like BTC, PIL, SHIB ,...
-                self.allowed_names = {name.split(
-                    "/")[0] for name in allowed_currencies}
 
         self.allowed_currencies = list(allowed_currencies)
         self.allowed_currencies.extend(extra_currencies)  
+
 
     def create_sqlite(self):
         with sqlite3.connect(self.database,timeout=20) as connection:
@@ -98,6 +86,7 @@ class CurrencyRequest:
                     query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
                     cursor.execute(query)
                 connection.commit()
+
 
     def create_sqlite2(self):
         with sqlite3.connect(self.database,timeout=20) as connection:
@@ -143,6 +132,7 @@ class CurrencyRequest:
                 # cursor.execute(query)
                 connection.commit()
 
+
     def update_sqlite(self,data:dict):
         with sqlite3.connect(self.database,timeout=20) as connection:
             cursor = connection.cursor()
@@ -177,16 +167,12 @@ class CurrencyRequest:
 
             connection.commit()
 
+
     def update_sqlite2(self,data:dict) -> None :
         with sqlite3.connect(self.database,timeout=20) as connection:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
-        #                 query = f"SELECT * FROM currencies2 WHERE [currency name] = '{currency_name}'"
-        #                 if cursor.execute(query).fetchone() == None and exchange == "MEXC":
-        #                     query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency_name}')"
-        #                     cursor.execute(query)
-        #                 else:
                     query = f"""UPDATE currencies2
                         SET {exchange.lower()} = '{price}'
                         WHERE [currency name] = '{currency_name}';"""
@@ -206,13 +192,13 @@ class CurrencyRequest:
                 if len(expected_row_values) > 1:
                     p_difference = percentage_difference(expected_row_values)
                     # try:
-                        # change_percent = float(row[3])
-                        # if change_percent >=20 and p_difference >= 5:
-                            # while True:
-                            #     try:
-                            #         # asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {row[3]}\nدرصد اختلاف:    {p_difference}"))
-                            #         break
-                            #     except: pass
+                    change_percent = float(row[3]) if row[3] != None else 0
+                    if change_percent >=20 and p_difference >= 5:
+                        while True:
+                            try:
+                                asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {row[3]}\nدرصد اختلاف:    {p_difference}"))
+                                break
+                            except: pass
                     currency_name = row[0]
                     query = f"""
                                 UPDATE currencies2
@@ -291,31 +277,6 @@ class CurrencyRequest:
 
             time.sleep(self.sleep_time)
     
-
-    # def mexc(self):        
-    #     "document: https://mxcdevelop.github.io/APIDoc/open.api.v2.en.html#ticker-information"
-    #     base_url = 'https://www.mexc.com'
-    #     prices_path = '/open/api/v2/market/ticker'
-
-    #     while True:
-    #         try:
-    #             with requests.get(base_url+prices_path) as response:
-    #                 currencies = response.json()['data']
-    #                 # data = {}
-    #                 for pair_currency in currencies:
-    #                     symbol = pair_currency['symbol']
-    #                     if symbol in self.allowed_currencies:
-    #                         price = number_rounder(float(pair_currency['last']))
-    #                         # self.data.get("MEXC").update({symbol:price})
-    #                         # print({"MEXC":{symbol:price}})
-    #                         # data.update({symbol:price})
-    #                         print({symbol:price})
-    #                         yield {symbol:price}
-    #                 # self.update_sqlite({"MEXC":data})
-    #                 # self.update_sqlite2({"MEXC":data})
-    #         except: print("mexc request failed!")
-    #         time.sleep(self.sleep_time)
-
     
     def mexc_status(self):
         base_url = 'https://www.mexc.com/'
@@ -352,26 +313,6 @@ class CurrencyRequest:
                 self.update_sqlite2({"MEXC_FULL_NAME":mexc_fullname_data})
                 break
             except: print("mexc_status request failed!")
-            time.sleep(self.sleep_time)
-
-
-    # def hotbit(self):
-    #     "document: https://github.com/hotbitex/hotbit.io-api-docs/blob/master/rest_api_en.md"
-    #     path = 'https://api.hotbit.io/api/v1/allticker'
-    #     while True:
-    #         hotbit_data = {}
-    #         try:
-    #             request = requests.get(path)
-    #             currencies = request.json()['ticker']
-    #             for currency in currencies:
-    #                 symbol = currency['symbol']
-    #                 if symbol in self.allowed_currencies:
-    #                     price = number_rounder(float(currency['last']))
-    #                     # self.data.get("HOTBIT").update({symbol:price})
-    #                     hotbit_data.update({symbol:price})
-    #             self.update_sqlite({"HOTBIT":hotbit_data})         
-    #         except: print("hotbit request failed!")
-    #         time.sleep(self.sleep_time)
 
 
     def lbank(self):
@@ -426,28 +367,6 @@ class CurrencyRequest:
                     pass
             lbank_scraping_data.update({currency:price})
             print("lbank scraping updated")
-           
-
-    # def biture(self):
-    #     base_url = 'https://openapi.bitrue.com/'
-    #     path = '/api/v1/exchangeInfo'
-    #     expected_allowed_currencies = [currency.replace("_",'') for currency in self.allowed_currencies]
-    #     while True:
-    #         biture_data = {}
-    #         try:
-    #             request = requests.get(base_url+path)
-    #             currencies = request.json().get('symbols')
-    #             for currency in currencies:
-    #                 symbol = currency.get("symbol")
-    #                 if symbol.upper() in expected_allowed_currencies:
-    #                     currency_index = expected_allowed_currencies.index(symbol.upper())
-    #                     float_price = float(currency.get('filters')[0].get('maxPrice'))*(1/10)
-    #                     price = number_rounder(float_price)
-    #                     # self.data.get("BITURE").update({self.allowed_currencies[currency_index]:price})
-    #                     biture_data.update({self.allowed_currencies[currency_index]:price})
-    #         except: print("biture request failed!")
-    #         self.update_sqlite({"BITURE":biture_data})
-    #         time.sleep(self.sleep_time)
 
 
     def gate(self):
@@ -546,7 +465,6 @@ class CurrencyRequest:
                                     list_status = list(status)
                                     list_status.insert(1," / ")
                                     status = "".join(list_status)
-                                # self.data.get("XT_STATUS").update({allowed_currency:status})
                                 xt_status_data.update({allowed_currency:status})
                 self.update_sqlite({"XT_STATUS":xt_status_data})
                 self.update_sqlite2({"XT_STATUS":xt_status_data})
@@ -575,7 +493,6 @@ class CurrencyRequest:
             try:
                 for currency, price_element in expected_elements.items():
                     price = number_rounder(float(price_element.text))
-                    # self.data.get("PHEMEX").update({currency: price})
                     phemex_data.update({currency:price})
                 self.update_sqlite({"PHEMEX":phemex_data})
                 self.update_sqlite2({"PHEMEX":phemex_data})
@@ -601,7 +518,6 @@ class CurrencyRequest:
                         if currency in expected_allowed_currencies:
                             index = expected_allowed_currencies.index(currency)
                             price = number_rounder(float(value.get("last")))
-                            # self.data.get("COINEX").update({self.allowed_currencies[index]:price})
                             coinex_data.update({self.allowed_currencies[index]:price})
                 self.update_sqlite({"COINEX":coinex_data})
                 self.update_sqlite2({"COINEX":coinex_data})
@@ -614,28 +530,26 @@ class CurrencyRequest:
         "document: https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot001_market010_asset_config"
         base_url = "https://api.coinex.com"
         path = "/v1/common/asset/config"
-        # expected_allowed_currencies = [currency.split("_")[0] for currency in self.allowed_currencies]
-        # while True:
-        coinex_status_data = {}
-        try:
-            with requests.get(base_url+path) as request:
-                currencies = request.json().get("data")
-                for currency in self.allowed_currencies:
-                    expected_currency = currency.split("_")[0]
-                    value = currencies.get(expected_currency)
-                    if value != None:
-                        status = 'w' if value.get("can_withdraw") == True else ''
-                        status += 'd' if value.get("can_deposit") == True else ''
-                        if len(status) == 2:
-                            status_list = list(status)
-                            status_list.insert(1,' / ')
-                            status = ''.join(status_list)
-                        # self.data.get('COINEX_STATUS').update({currency:status})
-                        coinex_status_data.update({currency:status})
-            self.update_sqlite({"COINEX_STATUS":coinex_status_data})
-            self.update_sqlite2({"COINEX_STATUS":coinex_status_data})
-        except: print("coinex_status Error! Maybe your vpn is not connected!")
-        time.sleep(self.sleep_time)
+        while True:
+            coinex_status_data = {}
+            try:
+                with requests.get(base_url+path) as request:
+                    currencies = request.json().get("data")
+                    for currency in self.allowed_currencies:
+                        expected_currency = currency.split("_")[0]
+                        value = currencies.get(expected_currency)
+                        if value != None:
+                            status = 'w' if value.get("can_withdraw") == True else ''
+                            status += 'd' if value.get("can_deposit") == True else ''
+                            if len(status) == 2:
+                                status_list = list(status)
+                                status_list.insert(1,' / ')
+                                status = ''.join(status_list)
+                            # self.data.get('COINEX_STATUS').update({currency:status})
+                            coinex_status_data.update({currency:status})
+                    self.update_sqlite({"COINEX_STATUS":coinex_status_data})
+                    self.update_sqlite2({"COINEX_STATUS":coinex_status_data})
+            except: print("coinex_status Error! Maybe your vpn is not connected!")
 
 
     def bibiox(self):
@@ -651,8 +565,6 @@ class CurrencyRequest:
                         if symbol in self.allowed_currencies:
                             price = number_rounder(float(currency.get("last")))
                             bibox_data.update({symbol:price})
-                            # self.data.get("BIBOX").update({symbol:price})
-                # print(bibox_data)
                 self.update_sqlite({"BIBOX":bibox_data})
                 self.update_sqlite2({"BIBOX":bibox_data})
             except: print("bibox request failed!")
@@ -696,7 +608,6 @@ class CurrencyRequest:
                             list_status = list(status)
                             list_status.insert(1,' / ')
                             status = ''.join(list_status)
-                        # self.data.get("BIBOX_STATUS").update({allowed_currency:status})
                         bibox_status_data.update({allowed_currency:status})
                         break
             self.update_sqlite({"BIBOX_STATUS":bibox_status_data})
