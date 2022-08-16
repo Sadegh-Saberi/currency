@@ -38,7 +38,7 @@ if os.path.isfile(file_path):
 load_dotenv()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
-    def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
+    def __init__(self,allowed_currencies_file:str,database:str):
         self.driver_path = os.getenv("DRIVER_PATH")
         self.database = database
         
@@ -49,8 +49,19 @@ class CurrencyRequest:
             if "" in allowed_currencies:
                 allowed_currencies.remove("")
 
+        with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
+            for currency in request.json().get("data"):
+                symbol = currency.get("symbol")
+                symbol_list = list(symbol.split("_")[0])[::-1]
+                for chr in symbol_list:
+                    try:
+                        int(chr)
+                        break
+                    except: pass
+                else: allowed_currencies.add(symbol)
+
         self.allowed_currencies = list(allowed_currencies)
-        self.allowed_currencies.extend(extra_currencies)  
+
 
 
     def create_sqlite(self):
@@ -116,15 +127,21 @@ class CurrencyRequest:
                 cursor.execute(query)
 
                 with requests.get("https://api.mexc.com/api/v3/ticker/24hr") as response:
+
                     change_percent_data = {}
                     for currency in response.json():
                         symbol = currency.get("symbol")
                         change_percent = currency.get("priceChangePercent")
-                        change_percent_data.update({symbol:change_percent_data})
-                    for currency in self.allowed_currencies:
-                        if abs(float(change_percent)*100) >= 5 and currency.replace("_","") in list(change_percent_data.keys()):
-                            query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
-                            cursor.execute(query)
+                        change_percent_data.update({symbol:float(change_percent)})
+
+                for currency in self.allowed_currencies:
+                    no_dash_currency = currency.replace("_","")
+                    print(no_dash_currency)
+                    print(abs(change_percent_data.get(no_dash_currency)*100))
+                    if abs(change_percent_data.get(no_dash_currency)*100) >= 5 and no_dash_currency in list(change_percent_data.keys()):
+                        query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
+                        print(query)
+                        cursor.execute(query)
             except:
                 print("table currency2 is already created!")
             finally:
@@ -609,20 +626,7 @@ class CurrencyRequest:
                 break
             except: print("bibox_status request failed!")
 
-
-all_allowed_currencies = []
-with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
-    for currency in request.json().get("data"):
-        symbol = currency.get("symbol")
-        symbol_list = list(symbol.split("_")[0])[::-1]
-        for chr in symbol_list:
-            try:
-                int(chr)
-                break
-            except: pass
-        else: all_allowed_currencies.append(symbol)
-
-currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"database.sqlite")
+currency_request = CurrencyRequest("allowed_currencies.txt","database.sqlite")
 
 currency_request.create_sqlite()
 currency_request.create_sqlite2()
@@ -644,8 +648,10 @@ Thread(target=currency_request.coinex).start()
 Thread(target=currency_request.bibiox).start()
 Thread(target=currency_request.xt).start()
 
+
 Thread(target=currency_request.phemex).start()
 Thread(target=currency_request.lbank_scraping).start()
+
 
 while True:
     for method in status_getters:
