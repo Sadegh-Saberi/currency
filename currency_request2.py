@@ -39,6 +39,7 @@ load_dotenv()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
+        self.driver_path = os.getenv("DRIVER_PATH")
         self.database = database
         
         with open(allowed_currencies_file, "r") as file:
@@ -274,8 +275,6 @@ class CurrencyRequest:
             self.update_sqlite2({"MEXC":mexc_data})
             self.update_sqlite2({"MEXC_CHANGE_PERCENT_SIGN":mexc_change_percent_sign_data})
             self.update_sqlite2({"MEXC_CHANGE_PERCENT":mexc_change_percent_data})
-
-            time.sleep(self.sleep_time)
     
     
     def mexc_status(self):
@@ -347,8 +346,9 @@ class CurrencyRequest:
             for currency in response.json():
                 api_currencies.append(currency.get("symbol").upper())
 
-        allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]            
-        driver = Chrome(options=self.options())
+        allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]  
+    
+        driver = Chrome(executable_path=self.driver_path, options=self.options())
         action = ActionChains(driver)
         driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
         search_box = WebDriverWait(driver,30).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
@@ -389,7 +389,6 @@ class CurrencyRequest:
             except: print("gate request failed!")
             self.update_sqlite({"GATE":gate_data})
             self.update_sqlite2({"GATE":gate_data})
-            time.sleep(self.sleep_time)
 
 
     def gate_status(self):
@@ -418,7 +417,6 @@ class CurrencyRequest:
 
                 break
             except: print("gate_status request failed!")
-            time.sleep(self.sleep_time)
         self.update_sqlite({"GATE_STATUS":gate_status_data})
         self.update_sqlite2({"GATE_STATUS":gate_status_data})
 
@@ -442,7 +440,6 @@ class CurrencyRequest:
                 self.update_sqlite({"XT":xt_data})
                 self.update_sqlite2({"XT":xt_data})
             except: print("xt request failed!")
-            time.sleep(self.sleep_time)
 
     
     def xt_status(self):
@@ -470,12 +467,11 @@ class CurrencyRequest:
                 self.update_sqlite2({"XT_STATUS":xt_status_data})
                 break
             except: print("xt_status request failed!")
-            time.sleep(self.sleep_time)
 
 
     def phemex(self):
         try:
-            driver = Chrome(options=self.options())
+            driver = Chrome(executable_path=self.driver_path,options=self.options())
             driver.get("https://phemex.com/markets?tabType=Spot")
             elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
                 (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
@@ -497,10 +493,7 @@ class CurrencyRequest:
                 self.update_sqlite({"PHEMEX":phemex_data})
                 self.update_sqlite2({"PHEMEX":phemex_data})
                 
-            except: print("phemex scraping failed!")
-
-            time.sleep(self.sleep_time)
-                
+            except: print("phemex scraping failed!")                
             
     # coinext needs VPN to be connected ...
     def coinex(self):
@@ -523,8 +516,6 @@ class CurrencyRequest:
                 self.update_sqlite2({"COINEX":coinex_data})
 
             except: print("coinex Error! Maybe your vpn is not connected!")
-            time.sleep(self.sleep_time)
-
 
     def coinex_status(self):
         "document: https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot001_market010_asset_config"
@@ -568,7 +559,6 @@ class CurrencyRequest:
                 self.update_sqlite({"BIBOX":bibox_data})
                 self.update_sqlite2({"BIBOX":bibox_data})
             except: print("bibox request failed!")
-            time.sleep(self.sleep_time)
 
 
     def bibox_status(self):
@@ -618,7 +608,6 @@ class CurrencyRequest:
                 do_request()
                 break
             except: print("bibox_status request failed!")
-            time.sleep(self.sleep_time)
 
 
 all_allowed_currencies = []
