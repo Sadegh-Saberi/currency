@@ -6,6 +6,7 @@ test*.py
 /unwanted files
 notes.txt
 *.sqlite
+*.sqlite-journal
 *.exe
 
 ### Python ###

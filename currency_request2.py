@@ -91,21 +91,20 @@ class CurrencyRequest:
                 print("table is already created!")
             finally:
                 # delete all rows in the database
-                query = f"DELETE FROM currencies;"
-                cursor.execute(query)
+                # query = f"DELETE FROM currencies;"
+                # cursor.execute(query)
                 # insert currencies name into the database
                 for currency in self.allowed_currencies:
                     query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
                     cursor.execute(query)
-            connection.commit()
+                connection.commit()
 
     def create_sqlite2(self):
         with sqlite3.connect(self.database,timeout=20) as connection:
             cursor = connection.cursor()
             try:
-                query = """
-                CREATE TABLE currencies2
-                    ([currency name] TEXT,
+                query = """CREATE TABLE currencies2(
+                    [currency name] TEXT,
                     mexc_full_name TEXT,
                     mexc_change_percent_sign TEXT,
                     mexc_change_percent BLOB,
@@ -123,14 +122,26 @@ class CurrencyRequest:
                     bibox_status TEXT,
                     [percentage difference] BLOB
                     )"""
+
                 cursor.execute(query)
+
+                with requests.get("https://api.mexc.com/api/v3/ticker/24hr") as response:
+                    change_percent_data = {}
+                    for currency in response.json():
+                        symbol = currency.get("symbol")
+                        change_percent = currency.get("priceChangePercent")
+                        change_percent_data.update({symbol:change_percent_data})
+                    for currency in self.allowed_currencies:
+                        if abs(float(change_percent)*100) >= 5 and currency.replace("_","") in list(change_percent_data.keys()):
+                            query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
+                            cursor.execute(query)
             except:
                 print("table currency2 is already created!")
             finally:
                 # delete all rows in the database
-                query = f"DELETE FROM currencies2;"
-                cursor.execute(query)
-            connection.commit()
+                # query = f"DELETE FROM currencies2;"
+                # cursor.execute(query)
+                connection.commit()
 
     def update_sqlite(self,data:dict):
         with sqlite3.connect(self.database,timeout=20) as connection:
@@ -171,15 +182,15 @@ class CurrencyRequest:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
-                        query = f"SELECT * FROM currencies2 WHERE [currency name] = '{currency_name}'"
-                        if cursor.execute(query).fetchone() == None and exchange == "MEXC":
-                            query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency_name}')"
-                            cursor.execute(query)
-                        else:
-                            query = f"""UPDATE currencies2
-                                SET {exchange.lower()} = '{price}'
-                                WHERE [currency name] = '{currency_name}';"""
-                            cursor.execute(query)
+        #                 query = f"SELECT * FROM currencies2 WHERE [currency name] = '{currency_name}'"
+        #                 if cursor.execute(query).fetchone() == None and exchange == "MEXC":
+        #                     query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency_name}')"
+        #                     cursor.execute(query)
+        #                 else:
+                    query = f"""UPDATE currencies2
+                        SET {exchange.lower()} = '{price}'
+                        WHERE [currency name] = '{currency_name}';"""
+                    cursor.execute(query)
 
 
             query = "SELECT * FROM currencies2"
