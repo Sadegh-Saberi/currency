@@ -162,7 +162,7 @@ class CurrencyRequest:
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-                connection.commit()
+            connection.commit()
 
 
     def update_sqlite2(self,data:dict) -> None :
@@ -191,7 +191,7 @@ class CurrencyRequest:
                                         """
                             cursor.execute(query)
                     except: pass
-                connection.commit()
+            connection.commit()
 
 
 
