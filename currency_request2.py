@@ -21,21 +21,22 @@ import sqlite3
 import time
 ### python telegram bot imports ###
 from telegram.ext import Application
-### telegram bot configurations ###
-application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
 # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 ### created custom functions imports ###
 from utils import percentage_difference, number_rounder, telegram_message
 ### local environment imports ###
 from dotenv import load_dotenv
-
-
-
+### local environment configurations ###
+load_dotenv()
+### telegram bot configurations ###
+token = os.getenv("BOT_TOKEN")
+application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
+### database configurations ###
 file_path = "database.sqlite"
+#-- delete database if exists --#
 if os.path.isfile(file_path):
     os.remove(file_path)
 
-load_dotenv()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
@@ -114,9 +115,7 @@ class CurrencyRequest:
                     bibox_status TEXT,
                     [percentage difference] BLOB
                     )"""
-
                 cursor.execute(query)
-
                 with requests.get("https://api.mexc.com/api/v3/ticker/24hr") as response:
                     change_percent_data = {}
                     for currency in response.json():
@@ -131,7 +130,7 @@ class CurrencyRequest:
                                 query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
                                 cursor.execute(query)
             except:
-                print("table currency2 is already created!")
+                print("error")
             finally:
                 # delete all rows in the database
                 # query = f"DELETE FROM currencies2;"
@@ -144,34 +143,26 @@ class CurrencyRequest:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
-                    try:
+
                         query = f"""UPDATE currencies
                                 SET {exchange.lower()} = '{price}'
                                 WHERE [currency name] = '{currency_name}';"""
                         cursor.execute(query)
-                    except: pass
 
-            query = "SELECT * FROM currencies"
-            rows = cursor.execute(query).fetchall()
-            for row in rows:
-                expected_row_values = []
-                for item in row[3:-1]:
-                    try:
-                        expected_row_values.append(float(item))
-                    except: pass
+                        query = f"""SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
+                        FROM currencies
+                        WHERE [currency name] = '{currency_name}';"""
+                        prcies_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
 
-                if len(expected_row_values) > 1:
-                    
-                    p_difference = percentage_difference(expected_row_values)
-                    currency_name = row[0]
-                    query = f"""
-                                UPDATE currencies
-                                SET [percentage difference] = '{p_difference}'
-                                WHERE [currency name] = '{currency_name}';
-                                """
-                    cursor.execute(query)
-
-            connection.commit()
+                        if len(prcies_row) > 1:
+                            p_difference = percentage_difference(prcies_row)
+                            query = f"""
+                                        UPDATE currencies
+                                        SET [percentage difference] = '{p_difference}'
+                                        WHERE [currency name] = '{currency_name}';
+                                        """
+                            cursor.execute(query)
+                connection.commit()
 
 
     def update_sqlite2(self,data:dict) -> None :
@@ -183,33 +174,26 @@ class CurrencyRequest:
                         SET {exchange.lower()} = '{price}'
                         WHERE [currency name] = '{currency_name}';"""
                     cursor.execute(query)
-
-
-            query = "SELECT * FROM currencies2"
-            rows = cursor.execute(query).fetchall()
-
-            for row in rows:
-                expected_row_values = []
-                for item in row[4:-1]:
+                    
+                    query = f"""SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
+                    FROM currencies2
+                    WHERE [currency name] = '{currency_name}';"""
                     try:
-                        expected_row_values.append(float(item))
+                        prices_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
+                        # print(prices_row)
+                        if len(prices_row) > 1:
+                            p_difference = percentage_difference(prices_row)
+                            # Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
+                            query = f"""
+                                        UPDATE currencies2
+                                        SET [percentage difference] = '{p_difference}'
+                                        WHERE [currency name] = '{currency_name}';
+                                        """
+                            cursor.execute(query)
                     except: pass
+                connection.commit()
 
-                if len(expected_row_values) > 1:
-                    p_difference = percentage_difference(expected_row_values)
 
-                    change_percent = float(row[3]) if row[3] != None else 0
-                    currency_name = row[0]
-                    # send telegram message (notification)
-                    Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
-
-                    query = f"""
-                                UPDATE currencies2
-                                SET [percentage difference] = '{p_difference}'
-                                WHERE [currency name] = '{currency_name}';
-                                """
-                    cursor.execute(query)
-        connection.commit()
 
 
     def options(self):
@@ -223,23 +207,20 @@ class CurrencyRequest:
                                                             'protected_media_identifier': 2, 'app_banner': 2, 'site_engagement': 2,
                                                             'durable_storage': 2}}
         options = ChromeOptions()
-
         options.add_experimental_option('prefs', prefs)
-        options.add_argument("disable-infobars")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-software-rasterizer")
+
         options.add_argument("--disable-setuid-sandbox") 
         options.add_argument("--disable-dev-shm-using") 
-        options.add_argument("--disable-extensions") 
-        options.add_argument("start-maximized") 
-        options.add_argument("disable-infobars")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--headless")
-        options.add_argument('--no-sandbox')
         options.add_argument('allow-elevated-browser')
+        options.add_argument("--disable-extensions") 
+        options.add_argument("disable-infobars")
+        options.add_argument("start-maximized") 
+        options.add_argument("--disable-gpu")
+        options.add_argument('--no-sandbox')
+        options.add_argument("--headless")
         options.headless = True
         # options.add_argument(r"user-data-dir=.\cookies\\test") 
-        # options.add_argument("--remote-debugging-port=9222")  # this
+        # options.add_argument("--remote-debugging-port=9222")
         return options
 
 
@@ -638,7 +619,6 @@ currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currenci
 
 currency_request.create_sqlite()
 currency_request.create_sqlite2()
-
 
 status_getters = [
     currency_request.mexc_status,

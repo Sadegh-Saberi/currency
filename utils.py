@@ -1,3 +1,5 @@
+import asyncio
+
 def number_rounder(number:float) -> str:
     # if the number is not 1, 2, 3 ...
     if int(number) != number:
@@ -28,3 +30,11 @@ def percentage_difference(list_of_numbers:list) -> float:
             row.remove(max_value)
     # return rounded result with 2 decimal place
     return round(result,2)
+
+def telegram_message(application,currency_name,change_percent,p_difference):
+    if change_percent >=20 and p_difference >= 5:
+        while True:
+            try:
+                asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {change_percent}\nدرصد اختلاف:    {p_difference}"))
+                break
+            except: pass
