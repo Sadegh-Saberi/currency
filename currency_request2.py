@@ -25,7 +25,7 @@ from telegram.ext import Application
 application = Application.builder().token("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg").connect_timeout(60).get_updates_read_timeout(60).build()
 # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 ### created custom functions imports ###
-from utils import percentage_difference, number_rounder
+from utils import percentage_difference, number_rounder, telegram_message
 ### local environment imports ###
 from dotenv import load_dotenv
 
@@ -38,34 +38,25 @@ if os.path.isfile(file_path):
 load_dotenv()
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
-    def __init__(self,allowed_currencies_file:str,database:str):
+    def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
         self.driver_path = os.getenv("DRIVER_PATH")
+        print(self.driver_path)
         self.database = database
         
         with open(allowed_currencies_file, "r") as file:
             # an allowed currency has 2 parts separated with '/' (slash) containing the name and the price of the currency
             allowed_currencies = {currency.upper() for currency in file.read().replace(
                 " ", "").replace("\n", ",").replace("/","_").split(",") if currency != ''}  # read the data in the text file and convert them to the list of wnated currencies
+            
             if "" in allowed_currencies:
                 allowed_currencies.remove("")
 
-        with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
-            for currency in request.json().get("data"):
-                symbol = currency.get("symbol")
-                symbol_list = list(symbol.split("_")[0])[::-1]
-                for chr in symbol_list:
-                    try:
-                        int(chr)
-                        break
-                    except: pass
-                else: allowed_currencies.add(symbol)
-
         self.allowed_currencies = list(allowed_currencies)
-
+        self.allowed_currencies.extend(extra_currencies)  
 
 
     def create_sqlite(self):
-        with sqlite3.connect(self.database,timeout=20) as connection:
+        with sqlite3.connect(self.database,timeout=60) as connection:
             cursor = connection.cursor()
             try:
                 query = """
@@ -101,7 +92,7 @@ class CurrencyRequest:
 
 
     def create_sqlite2(self):
-        with sqlite3.connect(self.database,timeout=20) as connection:
+        with sqlite3.connect(self.database,timeout=60) as connection:
             cursor = connection.cursor()
             try:
                 query = """CREATE TABLE currencies2(
@@ -127,18 +118,18 @@ class CurrencyRequest:
                 cursor.execute(query)
 
                 with requests.get("https://api.mexc.com/api/v3/ticker/24hr") as response:
-
                     change_percent_data = {}
                     for currency in response.json():
                         symbol = currency.get("symbol")
                         change_percent = currency.get("priceChangePercent")
-                        change_percent_data.update({symbol:float(change_percent)})
+                        change_percent_data.update({symbol:change_percent})
 
-                for currency in self.allowed_currencies:
-                    no_dash_currency = currency.replace("_","")
-                    if abs(change_percent_data.get(no_dash_currency)*100) >= 5 and no_dash_currency in list(change_percent_data.keys()):
-                        query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
-                        cursor.execute(query)
+                    for currency in self.allowed_currencies:
+                        change_percent = change_percent_data.get(currency.replace("_",""))
+                        if change_percent != None:
+                            if abs(float(change_percent)*100) >= 5:
+                                query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
+                                cursor.execute(query)
             except:
                 print("table currency2 is already created!")
             finally:
@@ -149,7 +140,7 @@ class CurrencyRequest:
 
 
     def update_sqlite(self,data:dict):
-        with sqlite3.connect(self.database,timeout=20) as connection:
+        with sqlite3.connect(self.database,timeout=60) as connection:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
@@ -184,7 +175,7 @@ class CurrencyRequest:
 
 
     def update_sqlite2(self,data:dict) -> None :
-        with sqlite3.connect(self.database,timeout=20) as connection:
+        with sqlite3.connect(self.database,timeout=60) as connection:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
@@ -206,26 +197,22 @@ class CurrencyRequest:
 
                 if len(expected_row_values) > 1:
                     p_difference = percentage_difference(expected_row_values)
-                    # try:
+
                     change_percent = float(row[3]) if row[3] != None else 0
-                    if change_percent >=20 and p_difference >= 5:
-                        while True:
-                            try:
-                                asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {row[3]}\nدرصد اختلاف:    {p_difference}"))
-                                break
-                            except: pass
                     currency_name = row[0]
+                    # send telegram message (notification)
+                    Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
+
                     query = f"""
                                 UPDATE currencies2
                                 SET [percentage difference] = '{p_difference}'
                                 WHERE [currency name] = '{currency_name}';
                                 """
                     cursor.execute(query)
-                    # except: print(f"change_percent: {change_percent}, p_differenece: {p_difference}")
         connection.commit()
 
 
-    def options(self, hidden: bool = True):
+    def options(self):
         prefs = {'profile.default_content_setting_values': {'images': 2,
                                                             'plugins': 2, 'popups': 2, 'geolocation': 2,
                                                             'notifications': 2, 'auto_select_certificate': 2, 'fullscreen': 2,
@@ -236,15 +223,23 @@ class CurrencyRequest:
                                                             'protected_media_identifier': 2, 'app_banner': 2, 'site_engagement': 2,
                                                             'durable_storage': 2}}
         options = ChromeOptions()
+
         options.add_experimental_option('prefs', prefs)
         options.add_argument("disable-infobars")
         options.add_argument("--disable-extensions")
         options.add_argument("--disable-software-rasterizer")
-        if hidden == True:
-            options.add_argument("--headless")
-            options.add_argument("--disable-gpu")
-        else:
-            options.add_argument("--start-maximized")
+        options.add_argument("--disable-setuid-sandbox") 
+        options.add_argument("--disable-dev-shm-using") 
+        options.add_argument("--disable-extensions") 
+        options.add_argument("start-maximized") 
+        options.add_argument("disable-infobars")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--headless")
+        options.add_argument('--no-sandbox')
+        options.add_argument('allow-elevated-browser')
+        options.headless = True
+        # options.add_argument(r"user-data-dir=.\cookies\\test") 
+        # options.add_argument("--remote-debugging-port=9222")  # this
         return options
 
 
@@ -484,29 +479,32 @@ class CurrencyRequest:
 
 
     def phemex(self):
-        try:
-            driver = Chrome(executable_path=self.driver_path,options=self.options())
-            driver.get("https://phemex.com/markets?tabType=Spot")
-            elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
-                (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
-            expected_elements = {}
-            for element in elements:
-                currency = element.find_element(
-                    By.CSS_SELECTOR, "div:nth-child(2) > div > div > span").text.replace(" ", "").replace("/","_")
-                if currency in self.allowed_currencies:
-                    price_element = element.find_element(
-                        By.CSS_SELECTOR, "div:nth-child(3)")
-                    expected_elements.update({currency: price_element})
-        except: print("phemex get data for scraping failed!")
+        # try:
+        # driver = Chrome(executable_path=self.driver_path,options=self.options())
+        driver = Chrome(executable_path=self.driver_path,options=self.options())
+        driver.get("https://phemex.com/markets?tabType=Spot")
+        elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
+        expected_elements = {}
+        for element in elements:
+            currency = element.find_element(
+                By.CSS_SELECTOR, "div:nth-child(2) > div > div > span").text.replace(" ", "").replace("/","_")
+            if currency in self.allowed_currencies:
+                price_element = element.find_element(
+                    By.CSS_SELECTOR, "div:nth-child(3)")
+                
+                expected_elements.update({currency: price_element})
+        # except: print("phemex get data for scraping failed!")
         while True:
             phemex_data = {}
             try:
                 for currency, price_element in expected_elements.items():
                     price = number_rounder(float(price_element.text))
                     phemex_data.update({currency:price})
+                print(phemex_data)
                 self.update_sqlite({"PHEMEX":phemex_data})
                 self.update_sqlite2({"PHEMEX":phemex_data})
-                
+
             except: print("phemex scraping failed!")                
             
     # coinext needs VPN to be connected ...
@@ -623,7 +621,20 @@ class CurrencyRequest:
                 break
             except: print("bibox_status request failed!")
 
-currency_request = CurrencyRequest("allowed_currencies.txt","database.sqlite")
+
+all_allowed_currencies = []
+with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
+    for currency in request.json().get("data"):
+        symbol = currency.get("symbol")
+        symbol_list = list(symbol.split("_")[0])[::-1]
+        for chr in symbol_list:
+            try:
+                int(chr)
+                break
+            except: pass
+        else: all_allowed_currencies.append(symbol)
+
+currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"database.sqlite")
 
 currency_request.create_sqlite()
 currency_request.create_sqlite2()
@@ -645,10 +656,8 @@ Thread(target=currency_request.coinex).start()
 Thread(target=currency_request.bibiox).start()
 Thread(target=currency_request.xt).start()
 
-
 Thread(target=currency_request.phemex).start()
 Thread(target=currency_request.lbank_scraping).start()
-
 
 while True:
     for method in status_getters:
