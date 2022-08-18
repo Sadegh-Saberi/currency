@@ -464,12 +464,17 @@ class CurrencyRequest:
         # driver = Chrome(executable_path=self.driver_path,options=self.options())
         driver = Chrome(executable_path=self.driver_path,options=self.options())
         driver.get("https://phemex.com/markets?tabType=Spot")
-        elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
-            (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
+        # elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located(
+        #     (By.CSS_SELECTOR, "body > div.wrap.svelte-1jjhroo > div.wrap.svelte-a0hxct > div > div.row.cp.wsn")))
+        elements = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located(
+            (By.XPATH, "/html/body/div[2]/div[4]/div/div")))
         expected_elements = {}
-        for element in elements:
+        for element in elements[1:]:
+            # currency = element.find_element(
+            #     By.CSS_SELECTOR, "div:nth-child(2) > div > div > span").text.replace(" ", "").replace("/","_")
             currency = element.find_element(
                 By.CSS_SELECTOR, "div:nth-child(2) > div > div > span").text.replace(" ", "").replace("/","_")
+                # "/html/body/div[2]/div[4]/div/div[2]/div[3]"
             if currency in self.allowed_currencies:
                 price_element = element.find_element(
                     By.CSS_SELECTOR, "div:nth-child(3)")
