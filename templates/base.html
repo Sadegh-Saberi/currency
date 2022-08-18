@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <meta http-equiv="refresh" content="5">
+        <!-- <meta http-equiv="refresh" content="5"> -->
         <link rel="stylesheet" href="{{ url_for('static',filename='stylesheet/style.css') }}">
     </head>
     <body>
+        <!-- <button type="button" onClick="window.location.reload()">
+            Reload Page
+         </button> -->
         <table>
             <thead>
                 {% block thead %}
@@ -15,5 +18,8 @@
                 {% endblock %}
             </tbody>
         </table>
+        <script>
+            setInterval(function () {window.location.reload()}, 5000);
+        </script>
     </body>
 </html>

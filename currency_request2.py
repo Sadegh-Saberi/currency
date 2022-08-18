@@ -32,7 +32,7 @@ load_dotenv()
 token = os.getenv("BOT_TOKEN")
 application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
 ### database configurations ###
-file_path = "database.sqlite"
+file_path = "./database.sqlite"
 #-- delete database if exists --#
 if os.path.isfile(file_path):
     os.remove(file_path)
@@ -89,7 +89,7 @@ class CurrencyRequest:
                 for currency in self.allowed_currencies:
                     query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
                     cursor.execute(query)
-                connection.commit()
+            connection.commit()
 
 
     def create_sqlite2(self):
@@ -615,7 +615,7 @@ with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
             except: pass
         else: all_allowed_currencies.append(symbol)
 
-currency_request = CurrencyRequest("allowed_currencies.txt",all_allowed_currencies,"database.sqlite")
+currency_request = CurrencyRequest("./allowed_currencies.txt",all_allowed_currencies,"./database.sqlite")
 
 currency_request.create_sqlite()
 currency_request.create_sqlite2()
