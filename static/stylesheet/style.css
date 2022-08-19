@@ -1,10 +1,10 @@
-td {
-    text-align: center;
-    border: 1px dotted black;
-
-}
 table {
     margin: auto;
     border-collapse: collapse;
-    width: 100%;
+    background-color: rgba(255, 254, 205, 0.316);
+}
+
+td {
+    text-align: center;
+    border: 1px solid black;
 }

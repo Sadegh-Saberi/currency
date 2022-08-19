@@ -180,9 +180,14 @@ class CurrencyRequest:
                     WHERE [currency name] = '{currency_name}';"""
                     try:
                         prices_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
-                        # print(prices_row)
                         if len(prices_row) > 1:
                             p_difference = percentage_difference(prices_row)
+                            change_percent = float("".join(cursor.execute(f"""
+                            SELECT mexc_change_percent_sign, mexc_change_percent
+                            FROM currencies2
+                            WHERE [currency name] = '{currency_name}';
+                            """).fetchone()))
+
                             # Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
                             query = f"""
                                         UPDATE currencies2
@@ -190,7 +195,7 @@ class CurrencyRequest:
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-                    except: pass
+                    except TypeError: pass 
             connection.commit()
 
 
@@ -229,10 +234,10 @@ class CurrencyRequest:
         base_url = 'https://www.mexc.com/'
         prices_path = 'open/api/v2/market/ticker'
         change_percent_url = "https://api.mexc.com/api/v3/ticker/24hr"
-        mexc_data = {}
-        mexc_change_percent_sign_data = {}
-        mexc_change_percent_data = {}
         while True:
+            mexc_data = {}
+            mexc_change_percent_sign_data = {}
+            mexc_change_percent_data = {}
             change_percent_data = {}
             with requests.get(change_percent_url) as response:
                 for currency in response.json():
@@ -487,7 +492,6 @@ class CurrencyRequest:
                 for currency, price_element in expected_elements.items():
                     price = number_rounder(float(price_element.text))
                     phemex_data.update({currency:price})
-                print(phemex_data)
                 self.update_sqlite({"PHEMEX":phemex_data})
                 self.update_sqlite2({"PHEMEX":phemex_data})
 
@@ -640,7 +644,6 @@ Thread(target=currency_request.gate).start()
 Thread(target=currency_request.coinex).start()
 Thread(target=currency_request.bibiox).start()
 Thread(target=currency_request.xt).start()
-
 Thread(target=currency_request.phemex).start()
 Thread(target=currency_request.lbank_scraping).start()
 

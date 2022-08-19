@@ -1,10 +1,8 @@
 from flask import Flask
 from flask import render_template
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
-db_path = os.getenv("DATABASE_PATH")
+db_path = "./database.sqlite"
 import sqlite3
 
 app = Flask(__name__)

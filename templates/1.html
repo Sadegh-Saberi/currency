@@ -1,4 +1,7 @@
 {% extends 'data.html' %}
+{% block head %}
+<link rel="stylesheet" href="{{url_for('static',filename='stylesheet/1.css')}}" >
+{% endblock %}
 {% block thead %}
 <tr>
     <td>name</td>
