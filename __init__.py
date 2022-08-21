@@ -1,12 +1,14 @@
 from flask import Flask
 from flask import render_template
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
-db_path = "./database.sqlite"
+db_path = os.getenv("DATABASE_PATH")
 import sqlite3
 
 app = Flask(__name__)
-
+connection_timeout = 3600
 
 def currencies_value_sorter(list_):
     try:
@@ -23,14 +25,14 @@ def currencies2_value_sorter(list_):
         return 0
 
 def currencies_data():
-    with sqlite3.connect(db_path,timeout=20) as connection:
+    with sqlite3.connect(db_path,timeout=connection_timeout) as connection:
         cursor = connection.cursor()
         result = cursor.execute("SELECT * FROM currencies;").fetchall()
         result.sort(key=currencies_value_sorter,reverse=True)
         return result
 
 def currencies2_data():
-    with sqlite3.connect(db_path,timeout=20) as connection:
+    with sqlite3.connect(db_path,timeout=connection_timeout) as connection:
         cursor = connection.cursor()
         result =  cursor.execute("SELECT * FROM currencies2;").fetchall()
         result.sort(key=currencies2_value_sorter,reverse=True)
@@ -46,3 +48,6 @@ def currencies():
 def currencies2():
     data = currencies2_data()
     return render_template("2.html",currencies=data)
+
+if __name__ == "__main__":
+    app.run()

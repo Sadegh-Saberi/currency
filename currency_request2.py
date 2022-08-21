@@ -14,34 +14,39 @@ import os
 ### threading imports ###
 from threading import Thread
 ### async imports ###
-import asyncio
+# import asyncio
 ### database imports ###
 import sqlite3
 ### time imports ###
 import time
 ### python telegram bot imports ###
-from telegram.ext import Application
+# from telegram.ext import Application
 # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 ### created custom functions imports ###
-from utils import percentage_difference, number_rounder, telegram_message
+from utils import(
+    percentage_difference,
+    number_rounder,
+    # telegram_message,
+)
 ### local environment imports ###
 from dotenv import load_dotenv
+
+
 ### local environment configurations ###
 load_dotenv()
 ### telegram bot configurations ###
-token = os.getenv("BOT_TOKEN")
-application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
+# token = os.getenv("BOT_TOKEN")
+# application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
 ### database configurations ###
-file_path = "./database.sqlite"
-#-- delete database if exists --#
-if os.path.isfile(file_path):
-    os.remove(file_path)
+
 
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
         self.driver_path = os.getenv("DRIVER_PATH")
-        print(self.driver_path)
+        # remove database
+        if os.path.isfile(database):
+            os.remove(database)
         self.database = database
         
         with open(allowed_currencies_file, "r") as file:
@@ -55,9 +60,11 @@ class CurrencyRequest:
         self.allowed_currencies = list(allowed_currencies)
         self.allowed_currencies.extend(extra_currencies)  
 
+        self.timeout = 3600
+
 
     def create_sqlite(self):
-        with sqlite3.connect(self.database,timeout=60) as connection:
+        with sqlite3.connect(self.database,timeout=self.timeout) as connection:
             cursor = connection.cursor()
             try:
                 query = """
@@ -89,11 +96,11 @@ class CurrencyRequest:
                 for currency in self.allowed_currencies:
                     query = f"INSERT INTO currencies ([currency name]) VALUES ('{currency}')"
                     cursor.execute(query)
-            connection.commit()
+                connection.commit()
 
 
     def create_sqlite2(self):
-        with sqlite3.connect(self.database,timeout=60) as connection:
+        with sqlite3.connect(self.database,timeout=self.timeout) as connection:
             cursor = connection.cursor()
             try:
                 query = """CREATE TABLE currencies2(
@@ -129,17 +136,18 @@ class CurrencyRequest:
                             if abs(float(change_percent)*100) >= 5:
                                 query = f"INSERT INTO currencies2 ([currency name]) VALUES ('{currency}')"
                                 cursor.execute(query)
+                                # connection./
             except:
                 print("error")
             finally:
-                # delete all rows in the database
-                # query = f"DELETE FROM currencies2;"
-                # cursor.execute(query)
+            #     # delete all rows in the database
+            #     # query = f"DELETE FROM currencies2;"
+            #     # cursor.execute(query)
                 connection.commit()
 
 
     def update_sqlite(self,data:dict):
-        with sqlite3.connect(self.database,timeout=60) as connection:
+        with sqlite3.connect(self.database,timeout=self.timeout) as connection:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
@@ -153,7 +161,6 @@ class CurrencyRequest:
                         FROM currencies
                         WHERE [currency name] = '{currency_name}';"""
                         prcies_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
-
                         if len(prcies_row) > 1:
                             p_difference = percentage_difference(prcies_row)
                             query = f"""
@@ -162,11 +169,12 @@ class CurrencyRequest:
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-            connection.commit()
+
+                connection.commit()
 
 
     def update_sqlite2(self,data:dict) -> None :
-        with sqlite3.connect(self.database,timeout=60) as connection:
+        with sqlite3.connect(self.database,timeout=self.timeout) as connection:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
@@ -174,7 +182,7 @@ class CurrencyRequest:
                         SET {exchange.lower()} = '{price}'
                         WHERE [currency name] = '{currency_name}';"""
                     cursor.execute(query)
-                    
+
                     query = f"""SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
                     FROM currencies2
                     WHERE [currency name] = '{currency_name}';"""
@@ -182,11 +190,11 @@ class CurrencyRequest:
                         prices_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
                         if len(prices_row) > 1:
                             p_difference = percentage_difference(prices_row)
-                            change_percent = float("".join(cursor.execute(f"""
-                            SELECT mexc_change_percent_sign, mexc_change_percent
-                            FROM currencies2
-                            WHERE [currency name] = '{currency_name}';
-                            """).fetchone()))
+                            # change_percent = float("".join(cursor.execute(f"""
+                            # SELECT mexc_change_percent_sign, mexc_change_percent
+                            # FROM currencies2
+                            # WHERE [currency name] = '{currency_name}';
+                            # """).fetchone()))
 
                             # Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
                             query = f"""
@@ -196,7 +204,7 @@ class CurrencyRequest:
                                         """
                             cursor.execute(query)
                     except TypeError: pass 
-            connection.commit()
+                connection.commit()
 
 
 
@@ -623,8 +631,9 @@ with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
                 break
             except: pass
         else: all_allowed_currencies.append(symbol)
-
-currency_request = CurrencyRequest("./allowed_currencies.txt",all_allowed_currencies,"./database.sqlite")
+database_path = os.getenv("DATABASE_PATH")
+text_path = os.getenv("TEXT_PATH")
+currency_request = CurrencyRequest(text_path,all_allowed_currencies,database_path)
 
 currency_request.create_sqlite()
 currency_request.create_sqlite2()
