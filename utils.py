@@ -29,13 +29,18 @@ def percentage_difference(list_of_numbers:list) -> float:
         else:
             row.remove(max_value)
     # return rounded result with 2 decimal place
-    return round(result,2)
+    return {
+        "min_value_index":row.index(min_value),
+        "max_value_index":row.index(max_value),
+        "result": round(result,2),
+    }
 
-def telegram_message(application,currency_name,change_percent,p_difference):
-    if change_percent >=20 and p_difference >= 10:
-        while True:
-            try:
-                asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {change_percent}\nدرصد اختلاف:    {p_difference}"))
+def telegram_message(application,message):
+    
+        # while True:
+        #     try:
+                # asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {change_percent}\nدرصد اختلاف:    {p_difference}"))
+                asyncio.run(application.bot.send_message(302546305,message))
 
-                break
-            except: pass
+            #     break
+            # except: pass

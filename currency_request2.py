@@ -14,19 +14,19 @@ import os
 ### threading imports ###
 from threading import Thread
 ### async imports ###
-# import asyncio
+import asyncio
 ### database imports ###
 import sqlite3
 ### time imports ###
 import time
 ### python telegram bot imports ###
-# from telegram.ext import Application
-# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+from telegram.ext import Application
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 ### created custom functions imports ###
 from utils import(
     percentage_difference,
     number_rounder,
-    # telegram_message,
+    telegram_message,
 )
 ### local environment imports ###
 from dotenv import load_dotenv
@@ -35,8 +35,8 @@ from dotenv import load_dotenv
 ### local environment configurations ###
 load_dotenv()
 ### telegram bot configurations ###
-# token = os.getenv("BOT_TOKEN")
-# application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
+token = os.getenv("BOT_TOKEN")
+application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
 ### database configurations ###
 
 
@@ -152,17 +152,20 @@ class CurrencyRequest:
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
 
-                        query = f"""UPDATE currencies
+                        query = f"""
+                                UPDATE currencies
                                 SET {exchange.lower()} = '{price}'
-                                WHERE [currency name] = '{currency_name}';"""
+                                WHERE [currency name] = '{currency_name}';
+                                """
                         cursor.execute(query)
 
-                        query = f"""SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
+                        query = f"""
+                        SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
                         FROM currencies
                         WHERE [currency name] = '{currency_name}';"""
                         prcies_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
                         if len(prcies_row) > 1:
-                            p_difference = percentage_difference(prcies_row)
+                            p_difference = percentage_difference(prcies_row)["result"]
                             query = f"""
                                         UPDATE currencies
                                         SET [percentage difference] = '{p_difference}'
@@ -178,31 +181,49 @@ class CurrencyRequest:
             cursor = connection.cursor()
             for exchange, value in list(data.items()):
                 for currency_name, price in list(value.items()):
-                    query = f"""UPDATE currencies2
+                    query = f"""
+                        UPDATE currencies2
                         SET {exchange.lower()} = '{price}'
-                        WHERE [currency name] = '{currency_name}';"""
+                        WHERE [currency name] = '{currency_name}';
+                        """
                     cursor.execute(query)
+                    exchanges = ["mexc","lbank","xt","gate","phemex","coinex","bibox"]
 
-                    query = f"""SELECT mexc, lbank, xt, gate, phemex, coinex, bibox
+                    query = f"""
+                    SELECT {", ".join(exchanges)}
                     FROM currencies2
-                    WHERE [currency name] = '{currency_name}';"""
+                    WHERE [currency name] = '{currency_name}';
+                    """
+
                     try:
                         prices_row = [float(price) for price in cursor.execute(query).fetchone() if price != None]
                         if len(prices_row) > 1:
-                            p_difference = percentage_difference(prices_row)
-                            # change_percent = float("".join(cursor.execute(f"""
-                            # SELECT mexc_change_percent_sign, mexc_change_percent
-                            # FROM currencies2
-                            # WHERE [currency name] = '{currency_name}';
-                            # """).fetchone()))
+                            p_difference= percentage_difference(prices_row)
 
-                            # Thread(target=telegram_message,args=(application,currency_name,change_percent,p_difference)).start()
+                            min_value_exchange = exchanges[p_difference["min_value_index"]]
+                            max_value_exchange = exchanges[p_difference["max_value_index"]]
                             query = f"""
                                         UPDATE currencies2
-                                        SET [percentage difference] = '{p_difference}'
+                                        SET [percentage difference] = '{p_difference["result"]}'
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
+                            change_percent = cursor.execute(f"""
+                            SELECT mexc_change_percent
+                            FROM currencies2
+                            WHERE [currency name] = '{currency_name}';
+                            """).fetchone()[0]
+                            if float(change_percent) >=20 and p_difference["result"] >= 10:
+                                message = f"""
+ارز:    {currency_name}
+درصد تغییرات:    {change_percent}
+صرافی با قیمت پایین‌تر:    {min_value_exchange}
+صرافی با قیمت بالاتر:    {max_value_exchange}
+درصد اختلاف:    {p_difference["result"]}
+                                """
+                                print(message)
+                                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                                Thread(target=telegram_message,args=(application,message)).start()
                     except TypeError: pass 
                 connection.commit()
 
