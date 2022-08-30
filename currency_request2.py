@@ -1,6 +1,8 @@
 ### selenium imports ###
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import Chrome, ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ChromeOptions
@@ -31,7 +33,7 @@ from utils import(
 ### local environment imports ###
 from dotenv import load_dotenv
 
-
+# counter
 ### local environment configurations ###
 load_dotenv()
 ### telegram bot configurations ###
@@ -60,7 +62,8 @@ class CurrencyRequest:
         self.allowed_currencies = list(allowed_currencies)
         self.allowed_currencies.extend(extra_currencies)  
 
-        self.timeout = 3600
+        self.timeout = 10
+        self.sleep_time = 3
 
 
     def create_sqlite(self):
@@ -103,7 +106,8 @@ class CurrencyRequest:
         with sqlite3.connect(self.database,timeout=self.timeout) as connection:
             cursor = connection.cursor()
             try:
-                query = """CREATE TABLE currencies2(
+                query = """
+                CREATE TABLE currencies2(
                     [currency name] TEXT,
                     mexc_full_name TEXT,
                     mexc_change_percent_sign TEXT,
@@ -200,30 +204,14 @@ class CurrencyRequest:
                         if len(prices_row) > 1:
                             p_difference= percentage_difference(prices_row)
 
-                            min_value_exchange = exchanges[p_difference["min_value_index"]]
-                            max_value_exchange = exchanges[p_difference["max_value_index"]]
+                            # min_value_exchange = exchanges[p_difference["min_value_index"]]
+                            # max_value_exchange = exchanges[p_difference["max_value_index"]]
                             query = f"""
                                         UPDATE currencies2
                                         SET [percentage difference] = '{p_difference["result"]}'
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-                            change_percent = cursor.execute(f"""
-                            SELECT mexc_change_percent
-                            FROM currencies2
-                            WHERE [currency name] = '{currency_name}';
-                            """).fetchone()[0]
-                            if float(change_percent) >=20 and p_difference["result"] >= 10:
-                                message = f"""
-ارز:    {currency_name}
-درصد تغییرات:    {change_percent}
-صرافی با قیمت پایین‌تر:    {min_value_exchange}
-صرافی با قیمت بالاتر:    {max_value_exchange}
-درصد اختلاف:    {p_difference["result"]}
-                                """
-                                print(message)
-                                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-                                Thread(target=telegram_message,args=(application,message)).start()
                     except TypeError: pass 
                 connection.commit()
 
@@ -295,6 +283,8 @@ class CurrencyRequest:
                                 # self.data.get("MEXC_CHANGE_PERCENT").update({symbol:number_rounder(abs(change_percent))})  
                                 # self.update_sqlite({"MEXC_CHANGE_PERCENT":{symbol:number_rounder(abs(change_percent))}}) 
                                 mexc_change_percent_data.update({symbol:number_rounder(abs(change_percent))})
+
+            time.sleep(self.sleep_time)
             self.update_sqlite({"MEXC":mexc_data})
             self.update_sqlite2({"MEXC":mexc_data})
             self.update_sqlite2({"MEXC_CHANGE_PERCENT_SIGN":mexc_change_percent_sign_data})
@@ -336,6 +326,7 @@ class CurrencyRequest:
                 self.update_sqlite2({"MEXC_FULL_NAME":mexc_fullname_data})
                 break
             except: print("mexc_status request failed!")
+            
 
 
     def lbank(self):
@@ -356,9 +347,13 @@ class CurrencyRequest:
                         price = number_rounder(currency['ticker']['latest'])
                         # self.data.get("LBANK").update({self.allowed_currencies[currency_index]:price})
                         lbank_data.update({self.allowed_currencies[currency_index]:price})
+                # update database tabels
+                self.update_sqlite({"LBANK":lbank_data})
+                self.update_sqlite2({"LBANK":lbank_data})
             except: print("lbank request failed!")
-            self.update_sqlite({"LBANK":lbank_data})
-            self.update_sqlite2({"LBANK":lbank_data})
+            time.sleep(self.sleep_time)
+
+
 
 
     def lbank_scraping(self):
@@ -370,27 +365,35 @@ class CurrencyRequest:
             for currency in response.json():
                 api_currencies.append(currency.get("symbol").upper())
 
-        allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]  
-    
-        driver = Chrome(executable_path=self.driver_path, options=self.options())
+        allowed_scraping_currencies = [currency for currency in self.allowed_currencies if currency not in api_currencies]
+        driver = Chrome(executable_path=self.driver_path, options=self.options()) 
         action = ActionChains(driver)
         driver.get("https://www.lbank.info/quotes.html#/exchange/usd")
         search_box = WebDriverWait(driver,30).until(EC.presence_of_element_located((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-header.g-between-center > div > div > div.el-input.el-input--prefix > input")))
         while True:
-            lbank_scraping_data = {}
+            # lbank_scraping_data = {}
             for currency in allowed_scraping_currencies:
-                search_box.clear()
+                # clear the search box. the reason that i didn't use '.clear()' methdo is that it didn't clear the search box totally sometims.
+                search_box.send_keys(Keys.CONTROL + "a")
+                search_box.send_keys(Keys.DELETE)
                 search_box.send_keys(currency.replace('_','/'))
+                
                 try:
-                    first_search_result = WebDriverWait(driver,0.25).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    # first_search_result = WebDriverWait(driver,1).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    first_search_result = WebDriverWait(driver,1).until(EC.presence_of_element_located((By.XPATH,"/html/body/div[3]/div[1]/div[1]/ul/li[1]")))
                     action.click(first_search_result).perform()
                     price = WebDriverWait(driver,5).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
-                    # self.data.get("LBANK").update({currency:price})
-                except:
-                    # allowed_scraping_currencies.remove(currency); print(currency,"deleted!")
-                    pass
-            lbank_scraping_data.update({currency:price})
-            print("lbank scraping updated")
+                    if price != "":
+                        self.update_sqlite({"LBANK":{currency:price}})
+                        self.update_sqlite2({"LBANK":{currency:price}})
+                        # lbank_scraping_data.update({currency:price})
+                        # print("OK =>",{currency:price})
+                except TimeoutException:
+                    # print(f"{currency} is not in lbank scraping!")
+                    allowed_scraping_currencies.remove(currency)
+            # print("lbank scraping updated")
+            # time.sleep(self.sleep_time)
+
 
 
     def gate(self):
@@ -410,9 +413,13 @@ class CurrencyRequest:
                         # self.data.get("GATE").update({symbol:price})
                         gate_data.update({symbol:price})
 
+                self.update_sqlite({"GATE":gate_data})
+                self.update_sqlite2({"GATE":gate_data})
+
             except: print("gate request failed!")
-            self.update_sqlite({"GATE":gate_data})
-            self.update_sqlite2({"GATE":gate_data})
+            time.sleep(self.sleep_time)
+
+
 
 
     def gate_status(self):
@@ -439,10 +446,10 @@ class CurrencyRequest:
                                 # self.data.get("GATE_STATUS").update({allowed_currency:status})
                                 gate_status_data.update({allowed_currency:status})
 
+                self.update_sqlite({"GATE_STATUS":gate_status_data})
+                self.update_sqlite2({"GATE_STATUS":gate_status_data})
                 break
             except: print("gate_status request failed!")
-        self.update_sqlite({"GATE_STATUS":gate_status_data})
-        self.update_sqlite2({"GATE_STATUS":gate_status_data})
 
 
     def xt(self):
@@ -464,6 +471,8 @@ class CurrencyRequest:
                 self.update_sqlite({"XT":xt_data})
                 self.update_sqlite2({"XT":xt_data})
             except: print("xt request failed!")
+            time.sleep(self.sleep_time)
+
 
     
     def xt_status(self):
@@ -525,6 +534,8 @@ class CurrencyRequest:
                 self.update_sqlite2({"PHEMEX":phemex_data})
 
             except: print("phemex scraping failed!")                
+            time.sleep(self.sleep_time)
+
             
     # coinext needs VPN to be connected ...
     def coinex(self):
@@ -547,6 +558,8 @@ class CurrencyRequest:
                 self.update_sqlite2({"COINEX":coinex_data})
 
             except: print("coinex Error! Maybe your vpn is not connected!")
+            time.sleep(self.sleep_time)
+
 
     def coinex_status(self):
         "document: https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot001_market010_asset_config"
@@ -590,6 +603,8 @@ class CurrencyRequest:
                 self.update_sqlite({"BIBOX":bibox_data})
                 self.update_sqlite2({"BIBOX":bibox_data})
             except: print("bibox request failed!")
+            time.sleep(self.sleep_time)
+
 
 
     def bibox_status(self):

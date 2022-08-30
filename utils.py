@@ -40,7 +40,7 @@ def telegram_message(application,message):
         # while True:
         #     try:
                 # asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {change_percent}\nدرصد اختلاف:    {p_difference}"))
-                asyncio.run(application.bot.send_message(302546305,message))
+                asyncio.run(application.bot.send_message(1380390649,message))
 
             #     break
             # except: pass
