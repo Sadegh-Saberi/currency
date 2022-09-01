@@ -2,6 +2,8 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,visualstudiocode,venv
 
 ### Custom ###
+*.zip
+log.txt
 test*.py
 /unwanted files
 notes.txt
