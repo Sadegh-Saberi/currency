@@ -39,11 +39,20 @@ def percentage_difference(list_of_numbers:list) -> float:
         "result": round(result,2),
     }
 
+<<<<<<< HEAD
 async def telegram_message():
         bot = telegram.Bot("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg")
         ids = [302546305, 1380390649]            
         async with aiosqlite.connect(database_path) as connection:
             async with connection.cursor() as cursor:
+=======
+def telegram_message(application,message):
+    
+        # while True:
+        #     try:
+                # asyncio.run(application.bot.send_message(302546305,f"ارز:    {currency_name}\nدرصد تغییرات:    {change_percent}\nدرصد اختلاف:    {p_difference}"))
+                asyncio.run(application.bot.send_message(1380390649,message))
+>>>>>>> 09b103fc2d907cf1c2fd6ee9945bf443c42a5657
 
                     exchanges = ["mexc","lbank","xt","gate","phemex","coinex","bibox"]
 
