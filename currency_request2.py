@@ -55,7 +55,7 @@ class CurrencyRequest:
         self.allowed_currencies = list(allowed_currencies)
         self.allowed_currencies.extend(extra_currencies)  
 
-        self.timeout = 10
+        self.timeout = 3600
         self.sleep_time = 3
 
 
