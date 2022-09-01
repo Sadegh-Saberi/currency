@@ -19,31 +19,23 @@ import asyncio
 import sqlite3
 ### time imports ###
 import time
-### python telegram bot imports ###
-from telegram.ext import Application
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 ### created custom functions imports ###
 from utils import(
     percentage_difference,
     number_rounder,
     telegram_message,
 )
-### local environment imports ###
-from dotenv import load_dotenv
-
-
-### local environment configurations ###
-load_dotenv()
-### telegram bot configurations ###
-token = os.getenv("BOT_TOKEN")
-application = Application.builder().token(token).connect_timeout(60).get_updates_read_timeout(60).build()
+### paths ###
+database_path = '/var/www/webApp/webApp/database.sqlite'
+text_path = '/var/www/webApp/webApp/allowed_currencies.txt'
 ### database configurations ###
 
 
 ### main class containig the requesting and scraping functions ###
 class CurrencyRequest:
     def __init__(self,allowed_currencies_file:str,extra_currencies:list,database:str):
-        self.driver_path = os.getenv("DRIVER_PATH")
+        # self.driver_path = os.getenv("DRIVER_PATH")
+        self.driver_path = "/var/www/webApp/driver/chromedriver"
         # remove database
         if os.path.isfile(database):
             os.remove(database)
@@ -200,31 +192,31 @@ class CurrencyRequest:
                         if len(prices_row) > 1:
                             p_difference= percentage_difference(prices_row)
 
-                            min_value_exchange = exchanges[p_difference["min_value_index"]]
-                            max_value_exchange = exchanges[p_difference["max_value_index"]]
+#                             min_value_exchange = exchanges[p_difference["min_value_index"]]
+#                             max_value_exchange = exchanges[p_difference["max_value_index"]]
                             query = f"""
                                         UPDATE currencies2
                                         SET [percentage difference] = '{p_difference["result"]}'
                                         WHERE [currency name] = '{currency_name}';
                                         """
                             cursor.execute(query)
-                            change_percent = cursor.execute(f"""
-                            SELECT mexc_change_percent
-                            FROM currencies2
-                            WHERE [currency name] = '{currency_name}';
-                            """).fetchone()[0]
-                            if float(change_percent) >=20 and p_difference["result"] >= 10:
-                                message = f"""
-ارز:    {currency_name}
-درصد تغییرات:    {change_percent}
-صرافی با قیمت پایین‌تر:    {min_value_exchange}
-صرافی با قیمت بالاتر:    {max_value_exchange}
-درصد اختلاف:    {p_difference["result"]}
-                                """
-                                print(message)
-                                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-                                Thread(target=telegram_message,args=(application,message)).start()
-                    except TypeError: pass 
+                        # change_percent = cursor.execute(f"""
+                        # SELECT mexc_change_percent
+                        # FROM currencies2
+                        # WHERE [currency name] = '{currency_name}';
+                        # """).fetchone()[0]
+                        # if float(change_percent) >=20 and p_difference["result"] >= 10:
+#                                 message = f"""
+# ارز:    {currency_name}
+# درصد تغییرات:    {change_percent}
+# صرافی با قیمت پایین‌تر:    {min_value_exchange}
+# صرافی با قیمت بالاتر:    {max_value_exchange}
+# درصد اختلاف:    {p_difference["result"]}
+#                                 """
+#                                 print(message)
+#                                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#                                 Thread(target=telegram_message,args=(application,message)).start()
+                    except TypeError: pass
                 connection.commit()
 
 
@@ -382,7 +374,7 @@ class CurrencyRequest:
                 search_box.clear()
                 search_box.send_keys(currency.replace('_','/'))
                 try:
-                    first_search_result = WebDriverWait(driver,0.25).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
+                    first_search_result = WebDriverWait(driver,0.).until(EC.presence_of_element_located((By.CSS_SELECTOR,'body > div.el-autocomplete-suggestion.el-popper > div.el-scrollbar > div:nth-child(1) > ul > li:nth-child(1)')))
                     action.click(first_search_result).perform()
                     price = WebDriverWait(driver,5).until(EC.presence_of_element_located(((By.CSS_SELECTOR,"body > div.quptes > div.g-wrap > div > div.market > div.table-container > div.market-body > table > tr:nth-child(2) > td:nth-child(3) > span:nth-child(1)")))).text
                     # self.data.get("LBANK").update({currency:price})
@@ -521,6 +513,7 @@ class CurrencyRequest:
                 for currency, price_element in expected_elements.items():
                     price = number_rounder(float(price_element.text))
                     phemex_data.update({currency:price})
+                    # print(currency)
                 self.update_sqlite({"PHEMEX":phemex_data})
                 self.update_sqlite2({"PHEMEX":phemex_data})
 
@@ -652,8 +645,7 @@ with requests.get("https://www.mexc.com/open/api/v2/market/symbols") as request:
                 break
             except: pass
         else: all_allowed_currencies.append(symbol)
-database_path = os.getenv("DATABASE_PATH")
-text_path = os.getenv("TEXT_PATH")
+
 currency_request = CurrencyRequest(text_path,all_allowed_currencies,database_path)
 
 currency_request.create_sqlite()
@@ -667,6 +659,17 @@ status_getters = [
     currency_request.bibox_status,
 ] 
 
+def status_runner():
+    while True:
+        for method in status_getters:
+            Thread(target=method).start()
+        time.sleep(300)
+
+def message_sender():
+    while True:
+        asyncio.run(telegram_message())
+        time.sleep(1800)
+
 
 Thread(target=currency_request.mexc_price_change).start()
 Thread(target=currency_request.lbank).start()
@@ -677,7 +680,6 @@ Thread(target=currency_request.xt).start()
 Thread(target=currency_request.phemex).start()
 Thread(target=currency_request.lbank_scraping).start()
 
-while True:
-    for method in status_getters:
-        Thread(target=method).start()
-    time.sleep(300)
+Thread(target=status_runner).start()
+time.sleep(100)
+Thread(target=message_sender).start()

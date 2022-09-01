@@ -1,7 +1,7 @@
 from flask import Flask
 from flask import render_template
 # replace it with a new db path if 
-db_path = "./database.sqlite"
+db_path = "/var/www/webApp/webApp/database.sqlite"
 import sqlite3
 
 app = Flask(__name__)
