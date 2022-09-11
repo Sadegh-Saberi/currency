@@ -41,7 +41,9 @@ def percentage_difference(list_of_numbers:list) -> float:
 
 async def telegram_message():
         bot = telegram.Bot("5193549054:AAF0ftjRutuv3LFh-i0Q_0QrII6RB73-POg")
-        ids = [302546305, 1380390649]            
+        with open("ids.txt","r") as file:
+            ids = file.read().split("\n")
+
         async with aiosqlite.connect(database_path) as connection:
             async with connection.cursor() as cursor:
                     exchanges = ["mexc","lbank","xt","gate","phemex","coinex","bibox"]
@@ -75,7 +77,7 @@ async def telegram_message():
                                         )
                                     for chat_id in ids:
                                         await bot.send_message(chat_id,message)
-                            except TypeError: pass
+                            except: pass
 
 if __name__ == "__main__":
     asyncio.run(telegram_message())

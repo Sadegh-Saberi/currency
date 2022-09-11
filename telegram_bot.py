@@ -16,7 +16,9 @@ async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
              "ری‌استارت شدن برنامه‌ی ارز ها \n /restart_currencies" "\n"
              "افزودن ارز ها \n /add_currencies" "\n"
              "حذف ارز ها \n /remove_currencies" "\n"
-             "مشاهده‌ی ارز ها \n /currencies_list" "\n",
+             "مشاهده‌ی ارز ها \n /currencies_list" "\n"
+             "اضافه کردن آیدی عددی\n /add_user_id" "\n"
+             ,
         quote=True,
     )
 
@@ -85,6 +87,19 @@ async def currencies_list(update:Update,context:ContextTypes.DEFAULT_TYPE):
     with open("allowed_currencies.txt","r") as file:
         await update.message.reply_text(file.read())
 
+### add user id ###
+async def add_user_id(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("لطفا آیدی عددی مورد نظر را ارسال کنید.")
+    return "GET_USER_ID"
+
+async def get_user_id(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    id = update.message.text.strip()
+    with open("ids.txt","a+") as file:
+        file.write(f"{id}\n")
+        await update.message.reply_text(f"آیدی عددی {id} اضافه شد. لطفا با همان اکانت، ربات را استارت کنید.")
+    return ConversationHandler.END
+        
+
 ### help ###
 async def help(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await start(update,context)
@@ -112,6 +127,13 @@ application.add_handler(ConversationHandler(
     fallbacks = {}
     ))
 
+application.add_handler(ConversationHandler(
+    entry_points=[CommandHandler("add_user_id",add_user_id)],
+    states={
+        "GET_USER_ID":[MessageHandler(filters.TEXT,get_user_id),]
+            },
+    fallbacks = {}
+    ))
 application.add_handler(MessageHandler(filters.TEXT,help))
 
 application.run_polling()
